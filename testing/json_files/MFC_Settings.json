@@ -1,0 +1,78 @@
+{
+    "PATH":{
+        "SaveFile": "./Daten/test.dat",
+        "images": "./img/"
+    },
+    
+    "TKINTER":{
+        "background-color": "#F2F2F2",
+        "border-color": "#000000",
+        "tabpadx": 50,
+        "font-size": 22        
+    },
+    "Background":{
+        "name": "./img/Background.png",
+        "width": 511,
+        "height": 659,
+        "factor": 1,
+        "x": 500,
+        "y": 20
+    },
+    "Close":{
+        "name": "./img/close.png",
+        "width": 50,
+        "height": 50,
+        "factor": 1,
+        "x": 930,
+        "y": 30
+        
+    },
+    
+    "T-Set":{
+        "x":[400],
+        "y":[220],
+        "Kommentar": "Position der T-Set für jede Zone pro Reaktor"
+    },
+    "T-Reaktor":{
+        "x": [ 360 , 440 ],
+        "y": [ 150, 320]
+    },
+
+    "CONTROL":{
+        "Name": "MFC Steuerung",
+        "amount": 1,
+        "DigitalOut": ["Tmf"],
+        "DualAnalogIn": ["24xB"],
+        "DualAnalogIn4-20": ["27Dz"],
+        "AnalogOut": ["Tgv"],
+        "Tc-R": [           "23kP"], 
+        "Tc-DO_index":[     0      ],
+        "Tc-DO_channel":[   0],
+        "TcExtra": [ "WQ8"]
+    },
+    
+    "MFC":{
+        "amount":1,
+        "name":           [         "CA"],
+        "AnalogOut_index":[         0],
+        "DualAnalogIn_index":[      0],
+        "DualAnalogIn_channel":[    0],
+        "gradient":            [    0.2],
+        "y-axis":               [   0],
+        "unit":                [    "ml/min"],
+        "x": 50,
+        "y": 20
+    },
+    
+    "Pressure":{
+        "amount":1,
+        "name":           [         "VorDruck"],
+        "DualAnalogInmA_index":[      0],
+        "DualAnalogInmA_channel":[    1],
+        "gradient":            [    0.0004],
+        "y-axis":               [   1500000],
+        "unit":                [    "mbar"],
+        "x":                   [    770],
+        "y":                   [    610]
+    }
+}
