@@ -41,7 +41,7 @@ class TFH:
         self.debugMode = debug
         self.config = config
         self.verify_config_devices()
-        self.test_vals = 1
+        self.test_vals = 2
 
     def verify_config_devices(self):
         print("verify devices")
