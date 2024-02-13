@@ -59,7 +59,7 @@ class TFH:
             raise ConnectionError("No Tinkerforge module found, check connection to master brick")
 
         # devices_required = ["25si", "23Uf"]
-        devices_required = ["25si", "23Uf"]
+        devices_required = ["Yee", "27A7"]
         if len(self.config):
             print("this is work in progress, first implemting automatic setup for basic MFCs")
             exit()
