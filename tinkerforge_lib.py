@@ -29,7 +29,6 @@ device_identifier_types = {
 
 
 class TFH:
-
     #	Industrial Analog Out Bricklet 2.0     2116  25si
     #   Industrial Dual Analog In Bricklet 2.0 2121  23Uf
 
@@ -41,10 +40,11 @@ class TFH:
         self.debugMode = debug
         self.config = config
         self.verify_config_devices()
+        self.setup_devices()
         self.test_vals = 2
 
     def verify_config_devices(self):
-        print("verify devices")
+        print("listing devices present: \n")
         # @todo define required and optional device from parsing
         """
         collects the UIDs of the connected device and checks against the listing of UIDs given from the config
@@ -58,16 +58,15 @@ class TFH:
         if not len(self.devices_present):
             raise ConnectionError("No Tinkerforge module found, check connection to master brick")
 
-        # devices_required = ["25si", "23Uf"]
-        devices_required = ["Yee", "27A7"]
         if len(self.config):
             print("this is work in progress, first implemting automatic setup for basic MFCs")
-            exit()
             # for device in self.config.get()
-        for uid in devices_required:
-            if uid not in self.devices_present:
-                raise ModuleNotFoundError("Missing Tinkerforge Element")
-
+            devices_required = ["25si", "23Uf"]
+            # devices_required = ["Yee", "27A7"]
+            for uid in devices_required:
+                if uid not in self.devices_present:
+                    raise ModuleNotFoundError("Missing Tinkerforge Element")
+        print("\nvalid setup for configured initialisation detected \n")
         # maybe make a secondary list for optional, and then throw a warning
         # do we need a device identifier check? what happen to TF elements if we go wrong?
 
@@ -95,9 +94,22 @@ class TFH:
             print(f"reconnect detected from device: {uid} - "
                   f"{device_identifier_types.get(device_identifier, 'unknown device type')}")
 
+    def setup_device(self, uid):
+        """
+        @Todo: prime candidate to be listed in a separate file
+        """
+        device_identifier = self.devices_present.get("device_identifier")
+        match device_identifier:
+            case 2121: self.devices_present[uid]["obj"] = BrickletIndustrialDualAnalogInV2(uid, self.conn)
+            case 2116: self.devices_present[uid]["obj"] = BrickletIndustrialAnalogOutV2(uid, self.conn)
+            case _: print(f"{uid} failed to setup device due to unkown device type {device_identifier}")
+
     def setup_devices(self):
         for key, value in self.config:
-            print()
+            self.setup_device(key)
+
+    def setup_callback(self, uid):
+        print()
 
 
 # ‼️ there is no passing of arguments here

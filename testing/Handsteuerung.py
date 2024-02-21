@@ -1,6 +1,6 @@
 import json
-from TinkerForgeHelperLib.tinkerforge_lib import *
-from TinkerForgeHelperLib.tkinter_lib import *
+from tinkerforge_lib import TFH
+from time import sleep
 
 
 # from .ChemTherm_library.tinkerforge_lib import *
