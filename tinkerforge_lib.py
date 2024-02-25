@@ -21,6 +21,13 @@ from time import sleep
 # import time
 from tinkerforge.ip_connection import IPConnection
 
+'''
+make a listing of linked devices in case of connection loss for failsafes?
+dict vs lists vs classes to save on input and dict callups
+
+disconnects: the disconnects of the master brick gets detected the others fails siltently 
+'''
+
 device_identifier_types = {
     13: "Master Brick",
     2121: "Industrial Dual Analog In Bricklet 2.0",
@@ -42,6 +49,10 @@ class TFH:
         self.verify_config_devices()
         self.setup_devices()
         self.test_vals = 2
+        self.inputVals = {}
+
+    def collect_inputs(self, _args):
+        print(_args)
 
     def verify_config_devices(self):
         print("listing devices present: \n")
@@ -73,8 +84,9 @@ class TFH:
     def cb_enumerate(self, uid, connected_uid, _, hardware_version, firmware_version,
                      device_identifier, enumeration_type):
 
-        # print("Enumeration Type:  " + str(enumeration_type))
+        # print("Enumeration Type triggered:  " + str(enumeration_type))
 
+        # This only triggers when the master brick disconnects it seems
         if enumeration_type == IPConnection.ENUMERATION_TYPE_DISCONNECTED:
             print(f"Disconnect detected from device: {uid} - "
                   f"{device_identifier_types.get(device_identifier, 'unknown device type')}")
@@ -93,18 +105,34 @@ class TFH:
         else:
             print(f"reconnect detected from device: {uid} - "
                   f"{device_identifier_types.get(device_identifier, 'unknown device type')}")
+            # @Todo now reengage the devices
+            self.setup_device(uid)
 
     def setup_device(self, uid):
         """
         @Todo: prime candidate to be listed in a separate file
         """
-        device_identifier = self.devices_present.get("device_identifier")
+        device_entry = self.devices_present.get(uid)
+        if device_entry is None:
+            print(f"Setup of not present device requested {uid}")
+            return
+
+        device_identifier = device_entry.get("device_identifier")
+        '''
+            self.obj.register_callback(self.obj.CALLBACK_TEMPERATURE, self.cb_read_t)
+            self.obj.set_temperature_callback_configuration(200, False, "
+        '''
+
         match device_identifier:
-            case 2121: self.devices_present[uid]["obj"] = BrickletIndustrialDualAnalogInV2(uid, self.conn)
+            case 2121:
+                dev = self.devices_present[uid]["obj"] = BrickletIndustrialDualAnalogInV2(uid, self.conn)
+                dev.register_callback(dev.CALLBACK_ALL_VOLTAGES, self.collect_inputs)
+                dev.set_all_voltages_callback_configuration(500, False)
             case 2116: self.devices_present[uid]["obj"] = BrickletIndustrialAnalogOutV2(uid, self.conn)
             case _: print(f"{uid} failed to setup device due to unkown device type {device_identifier}")
 
     def setup_devices(self):
+        self.setup_device("23Uf")
         for key, value in self.config:
             self.setup_device(key)
 
