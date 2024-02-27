@@ -72,6 +72,7 @@ class TFH:
             self.uid = uid
             self.device_type = device_type
             self.obj = dev_obj
+            self.val = 0
 
     def __init__(self, ip, port, config: dict, debug=False):
         self.conn = IPConnection()
@@ -80,7 +81,6 @@ class TFH:
         self.devices_present = {}
         self.debugMode = debug
         self.config = config
-        self.test_vals = 2
         self.inputs = {}
         self.outputs = {}
         self.verify_config_devices()
@@ -114,13 +114,14 @@ class TFH:
     def __manage_outputs(self):
         for uid, output_dev in self.outputs.items():
             # @Todo: this only works for this specific device
+            output_dev.val = output_dev.val + 1
             try:
                 enabled = output_dev.obj.get_enabled()
             except tinkerforge.ip_connection.Error as exp:
                 print(f"connection to output {uid} - "
                       f"{device_identifier_types.get(output_dev.device_type, 'unknown device type')} has been lost")
             try:
-                output_dev.obj.set_voltage(6)
+                output_dev.obj.set_voltage(output_dev.val)
             except Exception as exp:
                 print(exp)
 
