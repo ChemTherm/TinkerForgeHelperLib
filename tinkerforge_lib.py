@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-from datetime import datetime
+from datetime import datetime as dt
+from datetime import timedelta
 import tinkerforge as tf
 
 from tinkerforge.bricklet_thermocouple_v2 import BrickletThermocoupleV2
@@ -21,23 +22,45 @@ from time import sleep
 # import time
 from tinkerforge.ip_connection import IPConnection
 
+from threading import Thread
+
 '''
 make a listing of linked devices in case of connection loss for failsafes?
 dict vs lists vs classes to save on input and dict callups
 
 disconnects: the disconnects of the master brick gets detected the others fails siltently 
+
+ * Calibration? is this something to be done on startup? or manually from brickviewer?
 '''
 
+# @todo Integrate this more neatly
 device_identifier_types = {
     13: "Master Brick",
     2121: "Industrial Dual Analog In Bricklet 2.0",
     2116: "Industrial Analog Out Bricklet 2.0",
 }
+default_timeout = timedelta(milliseconds=1000)
 
 
 class TFH:
-    #	Industrial Analog Out Bricklet 2.0     2116  25si
-    #   Industrial Dual Analog In Bricklet 2.0 2121  23Uf
+    # Industrial Analog Out Bricklet 2.0     2116  25si
+    # Industrial Dual Analog In Bricklet 2.0 2121  23Uf
+
+    class InputDevice:
+        def __init__(self, uid, device_type, timeout=default_timeout):
+            self.uid = uid
+            # @Todo: need to define the input count since we cannot assign value in process without defining prior
+            self.values = [0, 0]
+            self.activity_timestamp = dt.now()
+            self.type = device_type
+            self.timeout = timeout
+
+        def collect_inputs(self, _args):
+            for i, value in enumerate(_args):
+                print(f"reading input on device {self.uid} - {i} {value}")
+                self.values[i] = value
+            # @Todo: is there a less costly check?
+            self.activity_timestamp = dt.now()
 
     def __init__(self, ip, port, config: dict, debug=False):
         self.conn = IPConnection()
@@ -46,13 +69,28 @@ class TFH:
         self.devices_present = {}
         self.debugMode = debug
         self.config = config
+        self.test_vals = 2
+        self.inputs = {}
         self.verify_config_devices()
         self.setup_devices()
-        self.test_vals = 2
-        self.inputVals = {}
+        self.run = True
 
-    def collect_inputs(self, _args):
-        print(_args)
+        self.watchdog = Thread(target=self.__watchdog())
+        self.watchdog.start()
+        # @Todo create flags for this with different fail saife and operational mode
+        self.operation_mode = True
+
+    def __watchdog(self):
+        while self.run:
+            now = dt.now()
+            self.operation_mode = True
+
+            for uid, input_dev in self.inputs.items():
+                delta = now - input_dev.activity_timestamp
+                if delta > input_dev.timeout:
+                    self.operation_mode = False
+                    print(f"timeout detected from uid {uid}, going failsafe")
+            sleep(0.1)
 
     def verify_config_devices(self):
         print("listing devices present: \n")
@@ -108,6 +146,9 @@ class TFH:
             # @Todo now reengage the devices
             self.setup_device(uid)
 
+    def get_index(self, uid):
+        return list(self.devices_present).index(uid)
+
     def setup_device(self, uid):
         """
         @Todo: prime candidate to be listed in a separate file
@@ -126,18 +167,41 @@ class TFH:
         match device_identifier:
             case 2121:
                 dev = self.devices_present[uid]["obj"] = BrickletIndustrialDualAnalogInV2(uid, self.conn)
-                dev.register_callback(dev.CALLBACK_ALL_VOLTAGES, self.collect_inputs)
+                input_obj = self.InputDevice(uid, device_identifier)
+                # This self needs to be an own instance
+                dev.register_callback(dev.CALLBACK_ALL_VOLTAGES, input_obj.collect_inputs)
+                self.inputs[uid] = input_obj
                 dev.set_all_voltages_callback_configuration(500, False)
-            case 2116: self.devices_present[uid]["obj"] = BrickletIndustrialAnalogOutV2(uid, self.conn)
-            case _: print(f"{uid} failed to setup device due to unkown device type {device_identifier}")
+            case 2116:
+                dev = self.devices_present[uid]["obj"] = BrickletIndustrialAnalogOutV2(uid, self.conn)
+                dev.set_voltage(0)
+                dev.set_enabled(True)
+                dev.set_out_led_status_config(0, 5000, 1)
+            case _:
+                print(f"{uid} failed to setup device due to unkown device type {device_identifier}")
+                return
+        print(f"successfully setup device {uid} - "
+              f"{device_identifier_types.get(device_identifier, 'unknown device type')}")
 
     def setup_devices(self):
+        print()
         self.setup_device("23Uf")
+        self.setup_device("25si")
         for key, value in self.config:
             self.setup_device(key)
+        print()
 
     def setup_callback(self, uid):
         print()
+
+    def set_output(self, uid, value):
+        dev_entry = self.devices_present.get(uid)
+        print(dev_entry)
+        dev = dev_entry.get("obj")
+        if dev is None:
+            print(f"OutPutdevice disconnect detected from {uid}")
+            return
+        dev.set_voltage(value)
 
 
 # ‼️ there is no passing of arguments here
@@ -194,7 +258,7 @@ class regler:
     ki = 0.000013
     kp = 0.018
     i = 0
-    time_last_call = datetime.now()
+    time_last_call = dt.now()
     pwroutput = 0
 
     def __init__(self, ido_handle, channel, tc_handle, frequency=10) -> None:
@@ -212,7 +276,7 @@ class regler:
     def start(self, t_soll):
         self.t_soll = t_soll
         self.running = True
-        self.time_last_call = datetime.now()
+        self.time_last_call = dt.now()
 
     def stop(self):
         self.running = False
@@ -225,7 +289,7 @@ class regler:
         if self.running:
             dT = self.t_soll - self.tc.t
             p = self.kp * dT
-            now = datetime.now()
+            now = dt.now()
             dtime = (now - self.time_last_call).total_seconds()
             self.time_last_call = now
             self.i = self.i + dT * self.ki * dtime
