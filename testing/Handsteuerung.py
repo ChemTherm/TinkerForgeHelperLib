@@ -16,8 +16,11 @@ def main():
     except FileNotFoundError:
         print("attempting automatic config")
         config = {}
+    except json.decoder.JSONDecodeError as err:
+        print(f"Config error:\n{err} \ncannot open config")
+        exit()
 
-    TFH("localhost", 4223, {})
+    tfh_obj = TFH("localhost", 4223, config)
     sleep(250)
 
     exit()
