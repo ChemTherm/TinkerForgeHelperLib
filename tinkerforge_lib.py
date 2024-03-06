@@ -84,7 +84,7 @@ class TFH:
         self.inputs = {}
         self.outputs = {}
         self.verify_config_devices()
-        self.setup_devices()
+        # self.setup_devices()
         self.run = True
         self.operation_mode = True
         self.main_loop = Thread(target=self.__loop())
@@ -125,6 +125,12 @@ class TFH:
             except Exception as exp:
                 print(exp)
 
+    def register_output_rule(self):
+        """
+        currently a bit TBD, just take this as a dummy demonstrator
+        """
+        return
+
     def verify_config_devices(self):
         print("listing devices present: \n")
         # @todo define required and optional device from parsing
@@ -140,14 +146,29 @@ class TFH:
         if not len(self.devices_present):
             raise ConnectionError("No Tinkerforge module found, check connection to master brick")
 
-        if len(self.config):
-            print("this is work in progress, first implemting automatic setup for basic MFCs")
-            # for device in self.config.get()
-            devices_required = ["25si", "23Uf"]
-            # devices_required = ["Yee", "27A7"]
-            for uid in devices_required:
-                if uid not in self.devices_present:
-                    raise ModuleNotFoundError("Missing Tinkerforge Element")
+        # if not len(self.config):
+
+        devices_required = []
+        for device_key, value in self.config.items():
+            print(device_key)
+            # @TODO: this will become device specifc at some point
+            if not all(key in value for key in ("input_device", "input_channel", "output_device", "output_channel")):
+                print(f"invalid config for device {device_key}")
+            else:
+                print("VALID config!")
+                devices_required.append(value.get("input_device"))
+                devices_required.append(value.get("output_device"))
+                self.setup_device(device_key)
+
+        self.setup_devices(devices_required)
+        print(devices_required)
+
+        # for device in self.config.get()
+        # devices_required = ["25si", "23Uf"]
+        # devices_required = ["Yee", "27A7"]
+        for uid in devices_required:
+            if uid not in self.devices_present:
+                raise ModuleNotFoundError(f"Missing Tinkerforge Element: {uid}")
         print("\nvalid setup for configured initialisation detected \n")
         # maybe make a secondary list for optional, and then throw a warning
         # do we need a device identifier check? what happen to TF elements if we go wrong?
@@ -219,11 +240,11 @@ class TFH:
         print(f"successfully setup device {uid} - "
               f"{device_identifier_types.get(device_identifier, 'unknown device type')}")
 
-    def setup_devices(self):
+    def setup_devices(self, devices_present):
         print()
-        self.setup_device("23Uf")
-        self.setup_device("25si")
-        for key, value in self.config:
+        # self.setup_device("23Uf")
+        # self.setup_device("25si")
+        for key in devices_present:
             self.setup_device(key)
         print()
 
