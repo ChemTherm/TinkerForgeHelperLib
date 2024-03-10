@@ -158,14 +158,9 @@ class TFH:
                 print("VALID config!")
                 devices_required.append(value.get("input_device"))
                 devices_required.append(value.get("output_device"))
-                self.setup_device(device_key)
 
         self.setup_devices(devices_required)
-        print(devices_required)
 
-        # for device in self.config.get()
-        # devices_required = ["25si", "23Uf"]
-        # devices_required = ["Yee", "27A7"]
         for uid in devices_required:
             if uid not in self.devices_present:
                 raise ModuleNotFoundError(f"Missing Tinkerforge Element: {uid}")
