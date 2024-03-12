@@ -1,4 +1,4 @@
-import json
+
 from tinkerforge_lib import TFH
 from time import sleep
 
@@ -10,17 +10,7 @@ def main():
     # t0 = time.time()
     json_name = "MFC_Settings"
 
-    try:
-        with open('./json_files/' + json_name + '.json', 'r') as config_file:
-            config = json.load(config_file)
-    except FileNotFoundError:
-        print("attempting automatic config")
-        config = {}
-    except json.decoder.JSONDecodeError as err:
-        print(f"Config error:\n{err} \ncannot open config")
-        exit()
-
-    tfh_obj = TFH("localhost", 4223, config)
+    tfh_obj = TFH("localhost", 4223, json_name)
     sleep(250)
 
     exit()

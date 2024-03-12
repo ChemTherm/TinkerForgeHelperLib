@@ -12,6 +12,7 @@ from tinkerforge.bricklet_analog_in_v3 import BrickletAnalogInV3
 from tinkerforge.bricklet_analog_out_v3 import BrickletAnalogOutV3
 from tinkerforge.bricklet_industrial_dual_analog_in_v2 import BrickletIndustrialDualAnalogInV2
 from tinkerforge.bricklet_industrial_dual_0_20ma_v2 import BrickletIndustrialDual020mAV2
+import json
 
 from time import sleep
 
@@ -34,6 +35,7 @@ disconnects: the disconnects of the master brick gets detected the others fails 
  * Calibration? is this something to be done on startup? or manually from brickviewer?
  
  what to do when an output fails?
+ @TODO check json failure handling
  
 '''
 
@@ -45,6 +47,23 @@ device_identifier_types = {
 }
 default_timeout = timedelta(milliseconds=1000)
 
+
+def get_config(config_name):
+    if config_name:
+        try:
+            with open('./json_files/' + config_name + '.json', 'r') as config_file:
+                return json.load(config_file)
+        except FileNotFoundError:
+            print("missing config file")
+        except json.decoder.JSONDecodeError as err:
+            print(f"Config error:\n{err} \ncannot open config")
+        exit()
+    else:
+        try:
+            import testing.json_files.config as cfg
+            return cfg.config
+        except ModuleNotFoundError:
+            exit("no backup python config present, exiting")
 
 class TFH:
     # Industrial Analog Out Bricklet 2.0     2116  25si
@@ -74,13 +93,13 @@ class TFH:
             self.obj = dev_obj
             self.val = 0
 
-    def __init__(self, ip, port, config: dict, debug=False):
+    def __init__(self, ip, port, config_name=False, debug=False):
         self.conn = IPConnection()
         self.conn.connect(ip, port)
         self.conn.register_callback(IPConnection.CALLBACK_ENUMERATE, self.cb_enumerate)
         self.devices_present = {}
         self.debugMode = debug
-        self.config = config
+        self.config = get_config(config_name)
         self.inputs = {}
         self.outputs = {}
         self.verify_config_devices()
