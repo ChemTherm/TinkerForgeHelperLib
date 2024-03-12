@@ -65,9 +65,14 @@ def get_config(config_name):
         except ModuleNotFoundError:
             exit("no backup python config present, exiting")
 
+
 class TFH:
     # Industrial Analog Out Bricklet 2.0     2116  25si
     # Industrial Dual Analog In Bricklet 2.0 2121  23Uf
+
+    class Control:
+        def __init__(self, config_key, config):
+            self.name = config_key
 
     class InputDevice:
         def __init__(self, uid, device_type, timeout=default_timeout):
@@ -115,10 +120,37 @@ class TFH:
         print("starting main loop")
         while self.run:
             self.__manage_inputs()
+            self.__run_controls()
             self.__manage_outputs()
             sleep(0.1)  # sleeps are not ideal iirc
 
+    def __run_controls(self):
+        for control_name, control_rule in self.config.items():
+            # presence of these is already checked in verify_config_devices, not the value type
+            input_channel = control_rule.get("input_channel")
+            input_device_uid = control_rule.get("input_device")
+            output_channel = control_rule.get("output_channel")
+            output_device_uid = control_rule.get("output_device")
+
+            gradient = control_rule.get("gradient")
+            x = control_rule.get("x")
+            y = control_rule.get("y")
+
+            # @TODO: needs to be neater
+            for element in [gradient, x, y]:
+                if element is None:
+                    print("missing control config")
+                    exit()
+
+            print(self.inputs[input_device_uid].values[input_channel])
+            output_value = (self.inputs[input_device_uid].values[input_channel] - y) * gradient
+            print(output_value)
+            self.outputs[output_device_uid].val = output_value
+
     def __manage_inputs(self):
+        """
+        purely managing timeouts and failsafe, the reading of values is done by the callbacks
+        """
         now = dt.now()
         self.operation_mode = True
 
@@ -131,11 +163,14 @@ class TFH:
                 print(f"timeout detected from uid {uid}, going failsafe")
 
     def __manage_outputs(self):
+        """
+        A simple function that just sets the given value, the rules and value are handled by Control classes
+        """
+        # @ TODO implement failsafe modes somewhere maybe here?
         for uid, output_dev in self.outputs.items():
             # @Todo: this only works for this specific device
-            output_dev.val = output_dev.val + 1
             try:
-                enabled = output_dev.obj.get_enabled()
+                _ = output_dev.obj.get_enabled()
             except tinkerforge.ip_connection.Error as exp:
                 print(f"connection to output {uid} - "
                       f"{device_identifier_types.get(output_dev.device_type, 'unknown device type')} has been lost")
@@ -170,7 +205,7 @@ class TFH:
         devices_required = []
         for device_key, value in self.config.items():
             print(device_key)
-            # @TODO: this will become device specifc at some point
+            # @TODO: this will become device specific at some point
             if not all(key in value for key in ("input_device", "input_channel", "output_device", "output_channel")):
                 print(f"invalid config for device {device_key}")
             else:
