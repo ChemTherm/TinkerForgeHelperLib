@@ -1,10 +1,21 @@
 {
-    "reference_name?": {
+    "mfc_1": {
         "type": "mfc",
         "input_device": "23Uf",
         "input_channel": 0,
         "output_device": "25si",
         "output_channel": 0,
+        "gradient": 0.2,
+        "x": 50,
+        "y": 20,
+        "permissiable_deviation": 0.1
+    },
+    "mfc_2": {
+        "type": "mfc",
+        "input_device": "23S1",
+        "input_channel": 1,
+        "output_device": "25so",
+        "output_channel": 1,
         "gradient": 0.2,
         "x": 50,
         "y": 20
