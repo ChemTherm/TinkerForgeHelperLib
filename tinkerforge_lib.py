@@ -98,7 +98,7 @@ class TFH:
             self.uid = uid
             self.device_type = device_type
             self.obj = dev_obj
-            self.val = 0
+            self.val = [0, 0]
 
     def __init__(self, ip, port, config_name=False, debug=False):
         self.conn = IPConnection()
@@ -144,10 +144,11 @@ class TFH:
                     print("missing control config")
                     exit()
 
-            print(self.inputs[input_device_uid].values[input_channel])
-            output_value = (self.inputs[input_device_uid].values[input_channel] - y) * gradient
-            print(output_value)
-            self.outputs[output_device_uid].val = output_value
+            # print(self.inputs[input_device_uid].values[input_channel])
+            input_val = self.inputs[input_device_uid].values[input_channel]
+            converted_value = (input_val - y) * gradient
+            print(f"{control_name}: in - {input_val} - {converted_value}")
+            self.outputs[output_device_uid].val[output_channel] = input_val
 
     def __manage_inputs(self):
         """
@@ -177,7 +178,9 @@ class TFH:
                 print(f"connection to output {uid} - "
                       f"{device_identifier_types.get(output_dev.device_type, 'unknown device type')} has been lost")
             try:
-                output_dev.obj.set_voltage(output_dev.val)
+                output_dev.obj.set_voltage(output_dev.val[0])
+                # @TODO there needs to be a check on the channels and device specific fncs/class or whatever
+                # output_dev.obj.set_voltage(output_dev.val[1])
             except Exception as exp:
                 print(exp)
 
@@ -307,8 +310,6 @@ class TFH:
 
     def setup_devices(self, devices_present):
         print()
-        # self.setup_device("23Uf")
-        # self.setup_device("25si")
         for key in devices_present:
             self.setup_device(key)
         print()
