@@ -8,7 +8,7 @@
         "gradient": 0.2,
         "x": 50,
         "y": 20,
-        "permissiable_deviation": 0.1
+        "permissible_deviation": 0.1
     },
     "mfc_2": {
         "type": "mfc",

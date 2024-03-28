@@ -70,11 +70,9 @@ class TFH:
     # Industrial Analog Out Bricklet 2.0     2116  25si
     # Industrial Dual Analog In Bricklet 2.0 2121  23Uf
 
-    """
-     class Control:
-        def __init__(self, config_key, config):
-            self.name = config_key
-    """
+    class Control:
+        def __init__(self):
+            self.last_deviation = False
 
     class InputDevice:
         def __init__(self, uid, device_type, timeout=default_timeout):
@@ -109,6 +107,7 @@ class TFH:
         self.config = get_config(config_name)
         self.inputs = {}
         self.outputs = {}
+        self.controls = {}
         self.verify_config_devices()
         # self.setup_devices()
         self.run = True
@@ -148,7 +147,23 @@ class TFH:
             input_val = self.inputs[input_device_uid].values[input_channel]
             converted_value = (input_val - y) * gradient
             print(f"{control_name}: in - {input_val} - {converted_value}")
+
+            soll_input = 0
             self.outputs[output_device_uid].val[output_channel] = input_val
+
+            # a 0 value is technically False but ... not a sensible value either
+            permissable_deviation = converted_value.get("permissible_deviation", False)
+            if permissable_deviation:
+                delta = abs(input_val - self.outputs[output_device_uid].val[output_channel])
+                if delta > permissable_deviation * soll_input:
+                    last_deviation = self.controls[control_name].get("last_deviation")
+                    # if last_deviation and last_deviation - dt.now()
+                    pass
+
+
+
+
+
 
     def __manage_inputs(self):
         """
@@ -184,12 +199,6 @@ class TFH:
             except Exception as exp:
                 print(exp)
 
-    def register_output_rule(self):
-        """
-        currently a bit TBD, just take this as a dummy demonstrator
-        """
-        return
-
     def verify_config_devices(self):
         print("listing devices present: \n")
         # @todo define required and optional device from parsing
@@ -213,24 +222,25 @@ class TFH:
             if not all(key in value for key in ("input_device", "input_channel", "output_device", "output_channel")):
                 print(f"invalid config for device {device_key} due to missing parameter")
                 exit()
-            else:
-                input_uid = value.get("input_device")
-                output_uid = value.get("output_device")
-                used_input_channels = channels_required.get(input_uid, [])
-                used_output_channels = channels_required.get(output_uid, [])
-                req_input_chann = value.get("input_channel")
-                req_output_chann = value.get("input_channel")
-                if req_input_chann in used_input_channels or req_output_chann in used_output_channels:
-                    print(f"invalid config: {device_key} has overlapping channels with previous configured devices")
-                    exit()
-                used_output_channels.append(req_output_chann)
-                used_input_channels.append(req_input_chann)
-                channels_required[input_uid] = used_input_channels
-                channels_required[output_uid] = used_output_channels
 
-                print("VALID config!")
-                devices_required.add(input_uid)
-                devices_required.add(output_uid)
+            self.controls[device_key] = Control()
+            input_uid = value.get("input_device")
+            output_uid = value.get("output_device")
+            used_input_channels = channels_required.get(input_uid, [])
+            used_output_channels = channels_required.get(output_uid, [])
+            req_input_chann = value.get("input_channel")
+            req_output_chann = value.get("input_channel")
+            if req_input_chann in used_input_channels or req_output_chann in used_output_channels:
+                print(f"invalid config: {device_key} has overlapping channels with previous configured devices")
+                exit()
+            used_output_channels.append(req_output_chann)
+            used_input_channels.append(req_input_chann)
+            channels_required[input_uid] = used_input_channels
+            channels_required[output_uid] = used_output_channels
+
+            print("VALID config!")
+            devices_required.add(input_uid)
+            devices_required.add(output_uid)
 
         self.setup_devices(devices_required)
 
