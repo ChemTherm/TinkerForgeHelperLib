@@ -54,6 +54,7 @@ device_identifier_types = {
     2124: "Industrial Digital Out 4 Bricklet 2.0",
     2121: "Industrial Dual Analog In Bricklet 2.0",
     2116: "Industrial Analog Out Bricklet 2.0",
+    2120: "Industrial Dual Analog IN 0-20mA Bricklet 2.0",
 }
 default_timeout = timedelta(milliseconds=1000)
 
@@ -70,7 +71,7 @@ def get_config(config_name):
         exit()
     else:
         try:
-            import testing.json_files.config as cfg
+            import config as cfg
             return cfg.config
         except ModuleNotFoundError:
             exit("no backup python config present, exiting")
@@ -109,9 +110,10 @@ class TFH:
 
         def collect_all(self, _args):
             for i, value in enumerate(_args):
-                # print(f"reading input on device {self.uid} - {i} {value}")
+                #print(f"reading input on device {self.uid} - {i} {value}")
                 self.values[i] = value
             # @Todo: is there a less costly check?
+            
             self.activity_timestamp = dt.now()
 
     class IndustrialDualAnalogInV2(InputDevice):
@@ -217,6 +219,7 @@ class TFH:
     def __run_controls(self):
         for control_name, control_rule in self.config.items():
             # presence of these is already checked in verify_config_devices, not the value type
+            device_type = control_rule.get("type")
             input_channel = control_rule.get("input_channel")
             input_device_uid = control_rule.get("input_device")
             output_channel = control_rule.get("output_channel")
@@ -227,11 +230,11 @@ class TFH:
                 continue
 
             gradient = control_rule.get("gradient")
-            x = control_rule.get("x")
-            y = control_rule.get("y")
+            x_axis = control_rule.get("x-axis")
+            unit = control_rule.get("unit")
 
             # @TODO: needs to be neater
-            for element in [gradient, x, y]:
+            for element in [gradient, x_axis]:
                 if element is None:
                     print("missing control config")
                     exit()
@@ -313,6 +316,8 @@ class TFH:
         channels_required = {}
         for device_key, value in self.config.items():
             print(device_key)
+            device_type = value.get("type")
+            print(device_type)
             # @TODO: this will become device specific at some point
             if not all(key in value for key in ("input_device", "input_channel", "output_device", "output_channel")):
                 print(f"invalid config for device {device_key} due to missing parameter")
