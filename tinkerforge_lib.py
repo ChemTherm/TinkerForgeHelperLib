@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+import logging
 from datetime import datetime as dt
 from datetime import timedelta
 import tinkerforge as tf
@@ -157,13 +158,16 @@ class TFH:
                 delta = abs(input_val - self.outputs[output_device_uid].val[output_channel])
                 if delta > permissable_deviation * soll_input:
                     last_deviation = self.controls[control_name].get("last_deviation")
-                    # if last_deviation and last_deviation - dt.now()
-                    pass
 
-
-
-
-
+                    if last_deviation and last_deviation - dt.now() > timedelta(seconds=30):
+                        msg = f"device {control_name} is deviating more than the permissible amount"
+                        # @todo: make this happen only once?
+                        logging.warning(msg)
+                        print(msg)
+                    else:
+                        controls[control_name]["last_deviation"] = dt.now()
+                else:
+                    controls[control_name]["last_deviation"] = False
 
     def __manage_inputs(self):
         """
