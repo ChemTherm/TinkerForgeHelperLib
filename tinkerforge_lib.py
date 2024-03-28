@@ -44,6 +44,7 @@ device_identifier_types = {
     13: "Master Brick",
     2121: "Industrial Dual Analog In Bricklet 2.0",
     2116: "Industrial Analog Out Bricklet 2.0",
+    2120: "Industrial Dual Analog IN 0-20mA Bricklet 2.0",
 }
 default_timeout = timedelta(milliseconds=1000)
 
@@ -60,7 +61,7 @@ def get_config(config_name):
         exit()
     else:
         try:
-            import testing.json_files.config as cfg
+            import config as cfg
             return cfg.config
         except ModuleNotFoundError:
             exit("no backup python config present, exiting")
@@ -88,9 +89,20 @@ class TFH:
 
         def collect_inputs(self, _args):
             for i, value in enumerate(_args):
-                # print(f"reading input on device {self.uid} - {i} {value}")
+                #print(f"reading input on device {self.uid} - {i} {value}")
                 self.values[i] = value
             # @Todo: is there a less costly check?
+            
+            self.activity_timestamp = dt.now()
+
+        def collect_inputs_current(self, channel, value):
+            if channel == 1:
+                self.values[channel] = value
+            """ for i, value in enumerate(_args):
+                print(f"reading input on device {self.uid} - {i} {value}")
+                self.values[i] = value
+            # @Todo: is there a less costly check? """
+            
             self.activity_timestamp = dt.now()
 
     class OutputDevice:
@@ -129,26 +141,34 @@ class TFH:
     def __run_controls(self):
         for control_name, control_rule in self.config.items():
             # presence of these is already checked in verify_config_devices, not the value type
+            device_type = control_rule.get("type")
             input_channel = control_rule.get("input_channel")
             input_device_uid = control_rule.get("input_device")
             output_channel = control_rule.get("output_channel")
             output_device_uid = control_rule.get("output_device")
 
             gradient = control_rule.get("gradient")
-            x = control_rule.get("x")
-            y = control_rule.get("y")
+            x_axis = control_rule.get("x-axis")
+            unit = control_rule.get("unit")
 
             # @TODO: needs to be neater
-            for element in [gradient, x, y]:
+            for element in [gradient, x_axis]:
                 if element is None:
                     print("missing control config")
                     exit()
 
             # print(self.inputs[input_device_uid].values[input_channel])
             input_val = self.inputs[input_device_uid].values[input_channel]
-            converted_value = (input_val - y) * gradient
-            print(f"{control_name}: in - {input_val} - {converted_value}")
-            self.outputs[output_device_uid].val[output_channel] = input_val
+            converted_value = round((input_val - x_axis) * gradient,2)
+            if device_type == "mfc":
+                print(f"{control_name}: in - {input_val} mV - {converted_value} {unit}")
+                if control_name == "MFC_1":
+                    self.outputs[output_device_uid].val[output_channel] = 2000    
+                else:
+                    self.outputs[output_device_uid].val[output_channel] = 1000
+            elif device_type == "pressure":
+                print(f"{control_name}: in - {input_val} mA - {converted_value} {unit}")
+
 
     def __manage_inputs(self):
         """
@@ -209,28 +229,49 @@ class TFH:
         channels_required = {}
         for device_key, value in self.config.items():
             print(device_key)
+            device_type = value.get("type")
+            print(device_type)
             # @TODO: this will become device specific at some point
-            if not all(key in value for key in ("input_device", "input_channel", "output_device", "output_channel")):
-                print(f"invalid config for device {device_key} due to missing parameter")
-                exit()
-            else:
-                input_uid = value.get("input_device")
-                output_uid = value.get("output_device")
-                used_input_channels = channels_required.get(input_uid, [])
-                used_output_channels = channels_required.get(output_uid, [])
-                req_input_chann = value.get("input_channel")
-                req_output_chann = value.get("input_channel")
-                if req_input_chann in used_input_channels or req_output_chann in used_output_channels:
-                    print(f"invalid config: {device_key} has overlapping channels with previous configured devices")
+            if device_type == "pressure":
+                if not all(key in value for key in ("input_device", "input_channel")):
+                    print(f"invalid config for device {device_key} due to missing parameter")
                     exit()
-                used_output_channels.append(req_output_chann)
-                used_input_channels.append(req_input_chann)
-                channels_required[input_uid] = used_input_channels
-                channels_required[output_uid] = used_output_channels
+                else:
+                    input_uid = value.get("input_device")
+                    used_input_channels = channels_required.get(input_uid, [])
+                    req_input_chann = value.get("input_channel")
+                    if req_input_chann in used_input_channels:
+                        print(f"invalid config: {device_key} has overlapping channels with previous configured devices")
+                        exit()
+                    used_input_channels.append(req_input_chann)
+                    channels_required[input_uid] = used_input_channels
 
-                print("VALID config!")
-                devices_required.add(input_uid)
-                devices_required.add(output_uid)
+                    print("VALID config!")
+                    devices_required.add(input_uid)
+
+
+            else: 
+                if not all(key in value for key in ("input_device", "input_channel", "output_device", "output_channel")):
+                    print(f"invalid config for device {device_key} due to missing parameter")
+                    exit()
+                else:
+                    input_uid = value.get("input_device")
+                    output_uid = value.get("output_device")
+                    used_input_channels = channels_required.get(input_uid, [])
+                    used_output_channels = channels_required.get(output_uid, [])
+                    req_input_chann = value.get("input_channel")
+                    req_output_chann = value.get("input_channel")
+                    if req_input_chann in used_input_channels or req_output_chann in used_output_channels:
+                        print(f"invalid config: {device_key} has overlapping channels with previous configured devices")
+                        exit()
+                    used_output_channels.append(req_output_chann)
+                    used_input_channels.append(req_input_chann)
+                    channels_required[input_uid] = used_input_channels
+                    channels_required[output_uid] = used_output_channels
+
+                    print("VALID config!")
+                    devices_required.add(input_uid)
+                    devices_required.add(output_uid)
 
         self.setup_devices(devices_required)
 
@@ -295,6 +336,13 @@ class TFH:
                 dev.register_callback(dev.CALLBACK_ALL_VOLTAGES, input_obj.collect_inputs)
                 self.inputs[uid] = input_obj
                 dev.set_all_voltages_callback_configuration(500, False)
+            case 2120:
+                dev = self.devices_present[uid]["obj"] = BrickletIndustrialDual020mAV2(uid, self.conn)
+                input_obj = self.InputDevice(uid, device_identifier)
+                # This self needs to be an own instance
+                dev.register_callback(dev.CALLBACK_CURRENT, input_obj.collect_inputs_current)
+                self.inputs[uid] = input_obj
+                dev.set_current_callback_configuration(1, 500, False, "x", 0, 0)
             case 2116:
                 dev = self.devices_present[uid]["obj"] = BrickletIndustrialAnalogOutV2(uid, self.conn)
                 dev.set_voltage(0)
@@ -314,265 +362,3 @@ class TFH:
             self.setup_device(key)
         print()
 
-
-# ‼️ there is no passing of arguments here
-def setup_devices(config, ipcon):
-    ABB_list = {}
-    do_list = [BrickletIndustrialDigitalOut4V2(UID, ipcon) for UID in config['CONTROL']['DigitalOut']]
-    dual_AI_list = [TF_IndustrialDualAnalogIn(UID, ipcon) for UID in config['CONTROL']['DualAnalogIn']]
-    dual_AI_mA_list = [TF_IndustrialDualAnalogIn_mA(UID, ipcon) for UID in config['CONTROL']['DualAnalogIn4-20']]
-
-    # unused
-    # pressure_list = {}
-    # module_list = {'DO': do_list, 'Dual-AI': dual_AI_list, 'Dual-AImA': dual_AI_mA_list}
-    device_list = {}
-
-    tc_list = []
-
-    for device_name in ['Tc-R', 'TcExtra']:
-        for UID in config['CONTROL'][device_name]:
-            try:
-                tc = Tc(ipcon, UID, typ='N')
-                tc_list.append(tc)
-            except tf.ip_connection.Error as err:
-                print(f"TC timed out: {err}")
-                pass
-    device_list['T'] = tc_list
-
-    # ❗ only if get all the defined TCs here can we iterate the tc_list
-    """
-    hp_list = [regler(do_list[i_DO], config['CONTROL']['Tc-DO_channel'][i_Tc], tc_list[i_Tc])
-               for i_DO, DO_UID in enumerate(config['CONTROL']['DigitalOut'])
-               for i_Tc, tc_UID in enumerate(config['CONTROL']['Tc-R']) if config['CONTROL']['Tc-DO_index'][i_Tc] == i_DO]
-    [hp.start(-300) for hp in hp_list]
-    device_list['HP'] = hp_list
-    """
-
-    mfc_list = [MFC(ipcon, config['CONTROL']['AnalogOut'][config['MFC']['AnalogOut_index'][i]],
-                    dual_AI_list[config['MFC']['DualAnalogIn_index'][i]], config['MFC']['DualAnalogIn_channel'][i]) for
-                i in range(config['MFC']['amount'])]
-    [mfc.config(config['MFC']['gradient'][index], config['MFC']['y-axis'][index], config['MFC']['unit'][index]) for
-     index, mfc in enumerate(mfc_list)]
-
-    pressure_list = [AI_mA(dual_AI_mA_list[config['Pressure']['DualAnalogInmA_index'][i]],
-                           config['Pressure']['DualAnalogInmA_channel'][i]) for i in
-                     range(config['Pressure']['amount'])]
-    [psc.config(config['Pressure']['gradient'][index], config['Pressure']['y-axis'][index],
-                config['Pressure']['unit'][index]) for index, psc in enumerate(pressure_list)]
-
-    device_list = {'MFC': mfc_list, 'P': pressure_list, 'ABB': ABB_list}
-    return device_list
-
-
-class regler:
-    t_soll = 0
-    ki = 0.000013
-    kp = 0.018
-    i = 0
-    time_last_call = dt.now()
-    pwroutput = 0
-
-    def __init__(self, ido_handle, channel, tc_handle, frequency=10) -> None:
-        self.running = False
-        self.tc = tc_handle
-        self.channel = channel
-        self.ido = ido_handle
-        self.frequency = frequency
-        self.ido.set_pwm_configuration(channel, self.frequency, 0)
-
-    def config(self, ki, kp):
-        self.ki = ki
-        self.kp = kp
-
-    def start(self, t_soll):
-        self.t_soll = t_soll
-        self.running = True
-        self.time_last_call = dt.now()
-
-    def stop(self):
-        self.running = False
-        self.regeln()
-
-    def set_t_soll(self, t_soll):
-        self.t_soll = t_soll
-
-    def regeln(self):
-        if self.running:
-            dT = self.t_soll - self.tc.t
-            p = self.kp * dT
-            now = dt.now()
-            dtime = (now - self.time_last_call).total_seconds()
-            self.time_last_call = now
-            self.i = self.i + dT * self.ki * dtime
-
-            pi = p + self.i
-            if pi > 1:
-                pi = 1
-                self.i = pi - p
-            elif pi < 0:
-                pi = 0
-            if self.i < 0:
-                self.i = 0
-            duty = 10000 * pi
-            self.pwroutput = duty / 10000
-            self.ido.set_pwm_configuration(self.channel, self.frequency, duty)
-            # print(self.channel)
-            # print("duty = " + str(duty))
-            # print("pi = " + str(pi))
-        else:
-            duty = 0
-            self.ido.set_pwm_configuration(self.channel, self.frequency, duty)
-
-
-class Tc:
-
-    def __init__(self, ipcon, ID, typ='K') -> None:
-        self.t = -300
-        self.UID = ID
-        self.obj = BrickletThermocoupleV2(ID, ipcon)
-
-        type_dict = {'B': 0, 'E': 1, 'J': 2, 'K': 3, 'N': 4, 'R': 5, 'S': 6, 'T': 7}
-
-        thermocouple_type = type_dict[typ]
-        self.obj.set_configuration(16, thermocouple_type, 0)
-        # 🔳 integrate to init unless there is a need for multiple excepts
-        self.start()
-
-    def start(self):
-        self.obj.register_callback(self.obj.CALLBACK_TEMPERATURE, self.cb_read_t)
-        self.obj.set_temperature_callback_configuration(200, False, "x", 0, 0)
-
-    def cb_read_t(self, temperature):
-        # print("Temperature: " + str(temperature/100.0) + " °C")
-        # print(self.UID)
-
-        if temperature < 0:
-            temperature = 200000
-        self.t = temperature / 100
-
-
-class Pressure:
-    def __init__(self, obj_in, channel) -> None:
-        self.obj = obj_in
-        self.channel = channel
-        self.config(0, 0, 'None')
-
-    def config(self, m, y, unit):
-        self.m = m  # Steigung
-        self.y = y  # Achsenabschnitt
-        self.unit = unit
-
-    def get(self):
-        # self.Voltage = self.obj.Voltage[self.channel]
-        self.obj.get_voltages(self.obj)
-        self.Voltage = self.obj.Voltage[self.channel]
-        if self.m > 0:
-            self.value = (self.Voltage - self.y) * self.m
-
-
-class AI_mA:
-    def __init__(self, obj_in, channel) -> None:
-        self.obj = obj_in
-        self.channel = channel
-        self.config(0, 0, 'None')
-
-    def config(self, m, y, unit):
-        self.m = m  # Steigung
-        self.y = y  # Achsenabschnitt
-        self.unit = unit
-
-    def get(self):
-        self.obj.get_current(self.obj)
-        self.current = self.obj.current[self.channel]
-        if self.m > 0:
-            self.value = (self.current - self.y) * self.m
-
-
-class TF_IndustrialDualAnalogIn:
-    # ❓❓❓ not sure what happens here, trace why we pass an object to getcurrent otherwise do something sensible
-    Voltage = [0, 0]
-
-    # def cb_voltage(self,voltages):
-    # self.Voltage[0] = voltages[0]/1000.0
-    # self.Voltage[1] = voltages[1]/1000.0
-
-    def __init__(self, ID_in, ipcon) -> None:
-        self.obj = BrickletIndustrialDualAnalogInV2(ID_in, ipcon)
-        self.ID = ID_in
-        # self.start()
-
-    # def start(self):
-    # self.obj.register_callback(self.obj.CALLBACK_ALL_VOLTAGES, self.cb_voltage)
-    # self.obj.set_all_voltages_callback_configuration(500, False)
-
-    def get_voltages(self, TF_obj):
-        self.Voltage = TF_obj.obj.get_all_voltages()
-
-
-class TF_IndustrialDualAnalogIn_mA:
-    # ❓❓❓ not sure what happens here, trace why we pass an object to getcurrent otherwise do something sensible
-    current = [0, 0]
-
-    def __init__(self, ID_in, ipcon) -> None:
-        self.obj = BrickletIndustrialDual020mAV2(ID_in, ipcon)
-
-    def get_current(self, TF_obj):
-        self.current[0] = TF_obj.obj.get_current(0)
-        self.current[1] = TF_obj.obj.get_current(1)
-
-
-class MFC:
-    def __init__(self, ipcon, ID_out, obj_in, channel) -> None:
-        self.UID = ID_out
-        self.Aout = BrickletIndustrialAnalogOutV2(ID_out, ipcon)
-        self.Aout.set_voltage(0)
-        self.Aout.set_enabled(True)
-        self.Aout.set_out_led_status_config(0, 5000, 1)
-        self.obj = obj_in
-        self.channel = channel
-        self.config(0, 0, 'None')
-
-    def get(self):
-        # self.Voltage = self.obj.Voltage[self.channel]
-        self.obj.get_voltages(self.obj)
-        self.Voltage = self.obj.Voltage[self.channel]
-        self.value = 0
-        if self.m > 0:
-            self.value = (self.Voltage - self.y) * self.m
-
-    def config(self, m, y, unit):
-        self.m = m  # Steigung
-        self.y = y  # Achsenabschnitt
-        self.unit = unit
-
-    def set(self, value):
-        if self.m > 0:
-            value = value / self.m + self.y
-        self.Aout.set_voltage(value)
-
-    def stop(self):
-        self.Aout.set_voltage(0)
-        self.Aout.set_enabled(False)
-
-
-class MFC_AIO_30:
-    def __init__(self, ipcon, ID_out, ID_in) -> None:
-        self.UID = ID_out
-        self.Aout = BrickletAnalogOutV3(ID_out, ipcon)
-        self.Aout.set_output_voltage(0)
-        self.Ain = BrickletAnalogInV3(ID_in, ipcon)  # Create device object
-        self.Ain.register_callback(self.Ain.CALLBACK_VOLTAGE, self.cb_voltage)
-        self.Ain.set_voltage_callback_configuration(1000, False, "x", 0, 0)
-
-    def cb_voltage(self, voltage):
-        self.voltage = voltage / 1000.0
-
-    def get(self):
-        self.Voltage = self.voltage
-
-    def set(self, value):
-        self.Aout.set_output_voltage(value)
-
-    def stop(self):
-        self.Aout.set_output_voltage(0)
-        self.Aout.set_enabled(False)
