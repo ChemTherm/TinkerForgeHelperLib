@@ -153,7 +153,7 @@ class TFH:
             self.outputs[output_device_uid].val[output_channel] = input_val
 
             # a 0 value is technically False but ... not a sensible value either
-            permissable_deviation = converted_value.get("permissible_deviation", False)
+            permissable_deviation = control_rule.get("permissible_deviation", False)
             if permissable_deviation:
                 delta = abs(input_val - self.outputs[output_device_uid].val[output_channel])
                 if delta > permissable_deviation * soll_input:
@@ -165,9 +165,9 @@ class TFH:
                         logging.warning(msg)
                         print(msg)
                     else:
-                        controls[control_name]["last_deviation"] = dt.now()
+                        self.controls[control_name].last_deviation = dt.now()
                 else:
-                    controls[control_name]["last_deviation"] = False
+                    self.controls[control_name].last_deviation = False
 
     def __manage_inputs(self):
         """
@@ -227,7 +227,7 @@ class TFH:
                 print(f"invalid config for device {device_key} due to missing parameter")
                 exit()
 
-            self.controls[device_key] = Control()
+            self.controls[device_key] = self.Control()
             input_uid = value.get("input_device")
             output_uid = value.get("output_device")
             used_input_channels = channels_required.get(input_uid, [])
