@@ -113,7 +113,7 @@ class TFH:
         # self.setup_devices()
         self.run = True
         self.operation_mode = True
-        self.main_loop = Thread(target=self.__loop())
+        self.main_loop = Thread(target=self.__loop)
         self.main_loop.start()
 
         # @Todo create flags for this with different fail safe and operational mode
