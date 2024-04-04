@@ -43,8 +43,15 @@ disconnects: the disconnects of the master brick gets detected the others fails 
 # @todo Integrate this more neatly
 device_identifier_types = {
     13: "Master Brick",
+    19: "Silent Stepper",
+    284: "Industrial Dual Relay",
+    2100: "Industrial Digital In 4 Bricklet 2.0",
+    2109: "Thermocouple",
+    2120: "Industrial Dual 0-20mA 2.0",
+    2124: "Industrial Digital Out 4 Bricklet 2.0",
     2121: "Industrial Dual Analog In Bricklet 2.0",
     2116: "Industrial Analog Out Bricklet 2.0",
+
 }
 default_timeout = timedelta(milliseconds=1000)
 
