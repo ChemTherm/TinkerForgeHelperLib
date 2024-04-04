@@ -9,9 +9,13 @@ from time import sleep
 def main():
     # t0 = time.time()
     json_name = "MFC_Settings"
-
     tfh_obj = TFH("localhost", 4223, json_name)
-    sleep(250)
+
+    try:
+        sleep(250)
+    finally:
+        tfh_obj.cleanup()
+
 
     exit()
 

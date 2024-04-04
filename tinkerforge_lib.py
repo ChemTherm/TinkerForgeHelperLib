@@ -117,6 +117,9 @@ class TFH:
         self.main_loop.start()
 
         # @Todo create flags for this with different fail safe and operational mode
+    def cleanup(self):
+        # @TODO: defenitely an argument to set values to something like a defined failsafe/shutdown state
+        self.run = False
 
     def __loop(self):
         print("starting main loop")
