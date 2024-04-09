@@ -13,6 +13,7 @@ from tinkerforge.bricklet_analog_in_v3 import BrickletAnalogInV3
 from tinkerforge.bricklet_analog_out_v3 import BrickletAnalogOutV3
 from tinkerforge.bricklet_industrial_dual_analog_in_v2 import BrickletIndustrialDualAnalogInV2
 from tinkerforge.bricklet_industrial_dual_0_20ma_v2 import BrickletIndustrialDual020mAV2
+
 import json
 
 from time import sleep
@@ -73,6 +74,11 @@ def get_config(config_name):
         except ModuleNotFoundError:
             exit("no backup python config present, exiting")
 
+def cb_current(channel, current):
+    print("Channel: " + str(channel))
+    print("Current: " + str(current / 1000000.0) + " mA")
+    print("")
+
 
 class TFH:
     # Industrial Analog Out Bricklet 2.0     2116  25si
@@ -82,22 +88,44 @@ class TFH:
         def __init__(self):
             self.last_deviation = False
 
+    # @Todo: may as well smash input and output device into one class
     class InputDevice:
-        def __init__(self, uid, device_type, timeout=default_timeout):
+        def __init__(self, uid, device_type, input_cnt=2, timeout=default_timeout):
             self.uid = uid
+            self.input_cnt = input_cnt
             # @Todo: need to define the input count since we cannot assign value in process without defining prior
-            self.values = [0, 0]
+            self.values = [0] * input_cnt
             self.activity_timestamp = dt.now()
             self.operational = True
-            self.type = device_type
+            self.device_type = device_type
             self.timeout = timeout
 
-        def collect_inputs(self, _args):
+
+        def collect_all(self, _args):
             for i, value in enumerate(_args):
                 # print(f"reading input on device {self.uid} - {i} {value}")
                 self.values[i] = value
             # @Todo: is there a less costly check?
             self.activity_timestamp = dt.now()
+
+    class IndustrialDual020mAV2(InputDevice):
+        def __init__(self, uid, conn):
+            self.device_type = 2120
+            self.current_channel = 0
+            super().__init__(uid, self.device_type)
+            self.dev = BrickletIndustrialDual020mAV2(uid, conn)
+            self.dev.register_callback(self.dev.CALLBACK_CURRENT, self.collect_single_current)
+            self.dev.set_current_callback_configuration(self.current_channel, 500,
+                                                        False, "x", 0, 0)
+
+        def collect_single_current(self, channel, value):
+            self.values[channel] = value
+            self.activity_timestamp = dt.now()
+            print(f"reading input on device {self.uid} - {channel} {value}")
+            if channel < self.input_cnt:
+                self.current_channel += 1
+            else:
+                self.current_channel = 0
 
     class OutputDevice:
         def __init__(self, uid, device_type, dev_obj):
@@ -312,11 +340,14 @@ class TFH:
         '''
 
         match device_identifier:
+            case 2120:
+                self.inputs[uid] = self.IndustrialDual020mAV2(uid, self.conn)
+
             case 2121:
                 dev = self.devices_present[uid]["obj"] = BrickletIndustrialDualAnalogInV2(uid, self.conn)
                 input_obj = self.InputDevice(uid, device_identifier)
                 # This self needs to be an own instance
-                dev.register_callback(dev.CALLBACK_ALL_VOLTAGES, input_obj.collect_inputs)
+                dev.register_callback(dev.CALLBACK_ALL_VOLTAGES, input_obj.collect_all)
                 self.inputs[uid] = input_obj
                 dev.set_all_voltages_callback_configuration(500, False)
             case 2116:
@@ -326,9 +357,10 @@ class TFH:
                 dev.set_out_led_status_config(0, 5000, 1)
                 output_obj = self.OutputDevice(uid, device_identifier, dev)
                 self.outputs[uid] = output_obj
+
             case _:
                 print(f"{uid} failed to setup device due to unkown device type {device_identifier}")
-                return
+                exit()
         print(f"successfully setup device {uid} - "
               f"{device_identifier_types.get(device_identifier, 'unknown device type')}")
 
