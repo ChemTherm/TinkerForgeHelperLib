@@ -124,7 +124,9 @@ class TFH:
         self.conn = IPConnection()
         self.conn.connect(ip, port)
         self.conn.register_callback(IPConnection.CALLBACK_ENUMERATE, self.cb_enumerate)
+        # may be renamed or localized, keeping it for now
         self.devices_present = {}
+        self.devices_connected = {}
         self.debugMode = debug
         self.config = get_config(config_name)
         self.inputs = {}
@@ -304,8 +306,9 @@ class TFH:
         else:
             print(f"reconnect detected from device: {uid} - "
                   f"{device_identifier_types.get(device_identifier, 'unknown device type')}")
-            # @Todo now reengage the devices, a master brick reconnect doesnt seem to be handled appropriately
-            self.setup_device(uid)
+            # only if the device is required/was used before its getting reconnected
+            if self.devices_connected.get(uid, False):
+                self.setup_device(uid)
 
     def setup_device(self, uid):
         device_entry = self.devices_present.get(uid)
@@ -340,8 +343,8 @@ class TFH:
         print(f"successfully setup device {uid} - "
               f"{device_identifier_types.get(device_identifier, 'unknown device type')}")
 
-    def setup_devices(self, devices_present):
+    def setup_devices(self, device_dict):
         print()
-        for key in devices_present:
+        for key in device_dict:
             self.setup_device(key)
         print()
