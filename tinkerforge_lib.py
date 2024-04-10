@@ -3,8 +3,6 @@
 import logging
 from datetime import datetime as dt
 from datetime import timedelta
-import tinkerforge as tf
-import tinkerforge.ip_connection
 
 from tinkerforge.bricklet_thermocouple_v2 import BrickletThermocoupleV2
 from tinkerforge.bricklet_industrial_digital_out_4_v2 import BrickletIndustrialDigitalOut4V2
@@ -21,21 +19,18 @@ from time import sleep
 # unused imports just keeping them around for now
 
 # from tinkerforge.bricklet_industrial_dual_relay import BrickletIndustrialDualRelay
-# import tkinter as tk
-# from PIL import Image,ImageTk
-# import time
-from tinkerforge.ip_connection import IPConnection
 
+from tinkerforge.ip_connection import IPConnection
+from tinkerforge.ip_connection import Error as IPConnError
 from threading import Thread
 
 '''
-make a listing of linked devices in case of connection loss for failsafes?
-dict vs lists vs classes to save on input and dict callups
+@ TODO: 🔲 ✅
+ 🔲 master brick reconnect handling 
+ ✅make a listing of linked devices in case of connection loss for failsafes?
 
 disconnects: the disconnects of the master brick gets detected the others fails siltently 
 
- * Calibration? is this something to be done on startup? or manually from brickviewer?
- 
  what to do when an output fails?
  @TODO check json failure handling
  
@@ -74,11 +69,6 @@ def get_config(config_name):
         except ModuleNotFoundError:
             exit("no backup python config present, exiting")
 
-def cb_current(channel, current):
-    print("Channel: " + str(channel))
-    print("Current: " + str(current / 1000000.0) + " mA")
-    print("")
-
 
 class TFH:
 
@@ -91,7 +81,6 @@ class TFH:
         def __init__(self, uid, device_type, input_cnt=2, timeout=default_timeout):
             self.uid = uid
             self.input_cnt = input_cnt
-            # @Todo: need to define the input count since we cannot assign value in process without defining prior
             self.values = [0] * input_cnt
             self.activity_timestamp = dt.now()
             self.operational = True
@@ -142,7 +131,6 @@ class TFH:
         self.outputs = {}
         self.controls = {}
         self.verify_config_devices()
-        # self.setup_devices()
         self.run = True
         self.operation_mode = True
         self.main_loop = Thread(target=self.__loop)
@@ -159,7 +147,7 @@ class TFH:
             self.__manage_inputs()
             self.__run_controls()
             self.__manage_outputs()
-            sleep(0.1)  # sleeps are not ideal iirc
+            sleep(0.1)
 
     def __run_controls(self):
         for control_name, control_rule in self.config.items():
@@ -228,9 +216,10 @@ class TFH:
             # @Todo: this only works for this specific device
             try:
                 _ = output_dev.obj.get_enabled()
-            except tinkerforge.ip_connection.Error as exp:
+            except IPConnError as exp:
                 print(f"connection to output {uid} - "
-                      f"{device_identifier_types.get(output_dev.device_type, 'unknown device type')} has been lost")
+                      f"{device_identifier_types.get(output_dev.device_type, 'unknown device type')} has been lost "
+                      f"{exp}")
             try:
                 output_dev.obj.set_voltage(output_dev.val[0])
                 # @TODO there needs to be a check on the channels and device specific fncs/class or whatever
@@ -315,23 +304,16 @@ class TFH:
         else:
             print(f"reconnect detected from device: {uid} - "
                   f"{device_identifier_types.get(device_identifier, 'unknown device type')}")
-            # @Todo now reengage the devices
+            # @Todo now reengage the devices, a master brick reconnect doesnt seem to be handled appropriately
             self.setup_device(uid)
 
     def setup_device(self, uid):
-        """
-        @Todo: prime candidate to be listed in a separate file
-        """
         device_entry = self.devices_present.get(uid)
         if device_entry is None:
             print(f"Setup of not present device requested {uid}")
             return
 
         device_identifier = device_entry.get("device_identifier")
-        '''
-            self.obj.register_callback(self.obj.CALLBACK_TEMPERATURE, self.cb_read_t)
-            self.obj.set_temperature_callback_configuration(200, False, "
-        '''
 
         match device_identifier:
             case 2120:
@@ -353,7 +335,7 @@ class TFH:
                 self.outputs[uid] = output_obj
 
             case _:
-                print(f"{uid} failed to setup device due to unkown device type {device_identifier}")
+                print(f"{uid} failed to setup device due to unknown device type {device_identifier}")
                 exit()
         print(f"successfully setup device {uid} - "
               f"{device_identifier_types.get(device_identifier, 'unknown device type')}")
