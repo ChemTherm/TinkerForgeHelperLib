@@ -81,8 +81,6 @@ def cb_current(channel, current):
 
 
 class TFH:
-    # Industrial Analog Out Bricklet 2.0     2116  25si
-    # Industrial Dual Analog In Bricklet 2.0 2121  23Uf
 
     class Control:
         def __init__(self):
@@ -99,7 +97,6 @@ class TFH:
             self.operational = True
             self.device_type = device_type
             self.timeout = timeout
-
 
         def collect_all(self, _args):
             for i, value in enumerate(_args):
@@ -321,9 +318,6 @@ class TFH:
             # @Todo now reengage the devices
             self.setup_device(uid)
 
-    def get_index(self, uid):
-        return list(self.devices_present).index(uid)
-
     def setup_device(self, uid):
         """
         @Todo: prime candidate to be listed in a separate file
@@ -344,14 +338,14 @@ class TFH:
                 self.inputs[uid] = self.IndustrialDual020mAV2(uid, self.conn)
 
             case 2121:
-                dev = self.devices_present[uid]["obj"] = BrickletIndustrialDualAnalogInV2(uid, self.conn)
+                dev = BrickletIndustrialDualAnalogInV2(uid, self.conn)
                 input_obj = self.InputDevice(uid, device_identifier)
                 # This self needs to be an own instance
                 dev.register_callback(dev.CALLBACK_ALL_VOLTAGES, input_obj.collect_all)
                 self.inputs[uid] = input_obj
                 dev.set_all_voltages_callback_configuration(500, False)
             case 2116:
-                dev = self.devices_present[uid]["obj"] = BrickletIndustrialAnalogOutV2(uid, self.conn)
+                dev = BrickletIndustrialAnalogOutV2(uid, self.conn)
                 dev.set_voltage(0)
                 dev.set_enabled(True)
                 dev.set_out_led_status_config(0, 5000, 1)
