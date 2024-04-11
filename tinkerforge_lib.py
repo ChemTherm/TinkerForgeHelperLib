@@ -3,6 +3,7 @@
 import logging
 from datetime import datetime as dt
 from datetime import timedelta
+from enum import IntEnum
 
 from tinkerforge.bricklet_thermocouple_v2 import BrickletThermocoupleV2
 from tinkerforge.bricklet_industrial_digital_out_4_v2 import BrickletIndustrialDigitalOut4V2
@@ -11,6 +12,7 @@ from tinkerforge.bricklet_analog_in_v3 import BrickletAnalogInV3
 from tinkerforge.bricklet_analog_out_v3 import BrickletAnalogOutV3
 from tinkerforge.bricklet_industrial_dual_analog_in_v2 import BrickletIndustrialDualAnalogInV2
 from tinkerforge.bricklet_industrial_dual_0_20ma_v2 import BrickletIndustrialDual020mAV2
+from tinkerforge.bricklet_industrial_dual_relay import BrickletIndustrialDualRelay
 
 import json
 
@@ -26,6 +28,7 @@ from threading import Thread
 
 '''
 @ TODO: 🔲 ✅
+ 🔲 check the super init bevhiour in regards to setting a value after before super
  🔲 master brick reconnect handling 
  ✅make a listing of linked devices in case of connection loss for failsafes?
 
@@ -71,6 +74,9 @@ def get_config(config_name):
 
 
 class TFH:
+    class IOtypes(IntEnum):
+        inputDevice = 1
+        outputDevice = 2
 
     class Control:
         def __init__(self):
@@ -78,14 +84,14 @@ class TFH:
 
     # @Todo: may as well smash input and output device into one class
     class InputDevice:
-        def __init__(self, uid, device_type, input_cnt=2, timeout=default_timeout):
+        def __init__(self, uid, input_cnt, timeout=default_timeout):
             self.uid = uid
             self.input_cnt = input_cnt
             self.values = [0] * input_cnt
             self.activity_timestamp = dt.now()
             self.operational = True
-            self.device_type = device_type
             self.timeout = timeout
+            self.ioType = 0
 
         def collect_all(self, _args):
             for i, value in enumerate(_args):
@@ -94,11 +100,21 @@ class TFH:
             # @Todo: is there a less costly check?
             self.activity_timestamp = dt.now()
 
-    class IndustrialDual020mAV2(InputDevice):
+    class IndustrialDualAnalogInV2(InputDevice):
+        device_type = 2121
+
         def __init__(self, uid, conn):
-            self.device_type = 2120
+            super().__init__(uid, 2)
+            self.dev = BrickletIndustrialDualAnalogInV2(uid, conn)
+            self.dev.register_callback(self.dev.CALLBACK_ALL_VOLTAGES, self.collect_all)
+            self.dev.set_all_voltages_callback_configuration(500, False)
+
+    class IndustrialDual020mAV2(InputDevice):
+        device_type = 2120
+
+        def __init__(self, uid, conn):
             self.current_channel = 0
-            super().__init__(uid, self.device_type)
+            super().__init__(uid, 2)
             self.dev = BrickletIndustrialDual020mAV2(uid, conn)
             self.dev.register_callback(self.dev.CALLBACK_CURRENT, self.collect_single_current)
             self.dev.set_current_callback_configuration(self.current_channel, 500,
@@ -114,11 +130,31 @@ class TFH:
                 self.current_channel = 0
 
     class OutputDevice:
-        def __init__(self, uid, device_type, dev_obj):
+        def __init__(self, uid,  output_cnt):
             self.uid = uid
-            self.device_type = device_type
-            self.obj = dev_obj
-            self.val = [0, 0]
+            self.dev = None
+            self.output_cnt = output_cnt
+            self.val = [0] * output_cnt
+            self.ioType = TFH.OutputDevice
+
+    class DualRelay(OutputDevice):
+        device_type = 284
+
+        def __init__(self, uid, conn):
+            self.uid = uid
+            super().__init__(uid, 2)
+            self.dev = BrickletIndustrialDualRelay(uid, conn)
+
+    class IndustrialAnalogOutV2(OutputDevice):
+        device_type = 2116
+
+        def __init__(self, uid, conn):
+            self.uid = uid
+            super().__init__(uid, 2)
+            self.dev = BrickletIndustrialAnalogOutV2(uid, conn)
+            self.dev.set_voltage(0)
+            self.dev.set_enabled(True)
+            self.dev.set_out_led_status_config(0, 5000, 1)
 
     def __init__(self, ip, port, config_name=False, debug=False):
         self.conn = IPConnection()
@@ -217,13 +253,13 @@ class TFH:
         for uid, output_dev in self.outputs.items():
             # @Todo: this only works for this specific device
             try:
-                _ = output_dev.obj.get_enabled()
+                _ = output_dev.dev.get_enabled()
             except IPConnError as exp:
                 print(f"connection to output {uid} - "
                       f"{device_identifier_types.get(output_dev.device_type, 'unknown device type')} has been lost "
                       f"{exp}")
             try:
-                output_dev.obj.set_voltage(output_dev.val[0])
+                output_dev.dev.set_voltage(output_dev.val[0])
                 # @TODO there needs to be a check on the channels and device specific fncs/class or whatever
                 # output_dev.obj.set_voltage(output_dev.val[1])
             except Exception as exp:
@@ -321,21 +357,10 @@ class TFH:
         match device_identifier:
             case 2120:
                 self.inputs[uid] = self.IndustrialDual020mAV2(uid, self.conn)
-
             case 2121:
-                dev = BrickletIndustrialDualAnalogInV2(uid, self.conn)
-                input_obj = self.InputDevice(uid, device_identifier)
-                # This self needs to be an own instance
-                dev.register_callback(dev.CALLBACK_ALL_VOLTAGES, input_obj.collect_all)
-                self.inputs[uid] = input_obj
-                dev.set_all_voltages_callback_configuration(500, False)
+                self.inputs[uid] = self.IndustrialDualAnalogInV2(uid, self.conn)
             case 2116:
-                dev = BrickletIndustrialAnalogOutV2(uid, self.conn)
-                dev.set_voltage(0)
-                dev.set_enabled(True)
-                dev.set_out_led_status_config(0, 5000, 1)
-                output_obj = self.OutputDevice(uid, device_identifier, dev)
-                self.outputs[uid] = output_obj
+                self.outputs[uid] = self.IndustrialAnalogOutV2(uid, self.conn)
 
             case _:
                 print(f"{uid} failed to setup device due to unknown device type {device_identifier}")
