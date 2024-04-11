@@ -30,6 +30,7 @@ from threading import Thread
 @ TODO: 🔲 ✅
  🔲 check the super init bevhiour in regards to setting a value after before super
  🔲 master brick reconnect handling 
+ 🔲 rework manageoutputs? the dual relay may need to work differently or get a fnc to set the outputs
  ✅make a listing of linked devices in case of connection loss for failsafes?
 
 disconnects: the disconnects of the master brick gets detected the others fails siltently 
