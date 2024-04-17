@@ -51,7 +51,6 @@ device_identifier_types = {
     2124: "Industrial Digital Out 4 Bricklet 2.0",
     2121: "Industrial Dual Analog In Bricklet 2.0",
     2116: "Industrial Analog Out Bricklet 2.0",
-
 }
 default_timeout = timedelta(milliseconds=1000)
 
@@ -163,7 +162,7 @@ class TFH:
         self.conn.register_callback(IPConnection.CALLBACK_ENUMERATE, self.cb_enumerate)
         # may be renamed or localized, keeping it for now
         self.devices_present = {}
-        self.devices_connected = {}
+        self.devices_required = set()
         self.debugMode = debug
         self.config = get_config(config_name)
         self.inputs = {}
@@ -244,7 +243,7 @@ class TFH:
             if delta > input_dev.timeout:
                 self.operation_mode = False
                 input_dev.operational = False
-                print(f"timeout detected from uid {uid}, going failsafe")
+                print(f"timeout detected from uid {uid} {input_dev.activity_timestamp}, going failsafe")
 
     def __manage_outputs(self):
         """
@@ -281,7 +280,6 @@ class TFH:
         if not len(self.devices_present):
             raise ConnectionError("No Tinkerforge module found, check connection to master brick")
 
-        devices_required = set()
         channels_required = {}
         for device_key, value in self.config.items():
             print(device_key)
@@ -306,12 +304,12 @@ class TFH:
             channels_required[output_uid] = used_output_channels
 
             print("VALID config!")
-            devices_required.add(input_uid)
-            devices_required.add(output_uid)
+            self.devices_required.add(input_uid)
+            self.devices_required.add(output_uid)
 
-        self.setup_devices(devices_required)
+        self.setup_devices()
 
-        for uid in devices_required:
+        for uid in self.devices_required:
             if uid not in self.devices_present:
                 raise ModuleNotFoundError(f"Missing Tinkerforge Element: {uid}")
         print("\nvalid setup for configured initialisation detected \n")
@@ -344,7 +342,7 @@ class TFH:
             print(f"reconnect detected from device: {uid} - "
                   f"{device_identifier_types.get(device_identifier, 'unknown device type')}")
             # only if the device is required/was used before its getting reconnected
-            if self.devices_connected.get(uid, False):
+            if uid in self.devices_required:
                 self.setup_device(uid)
 
     def setup_device(self, uid):
@@ -369,8 +367,8 @@ class TFH:
         print(f"successfully setup device {uid} - "
               f"{device_identifier_types.get(device_identifier, 'unknown device type')}")
 
-    def setup_devices(self, device_dict):
+    def setup_devices(self):
         print()
-        for key in device_dict:
+        for key in self.devices_required:
             self.setup_device(key)
         print()
