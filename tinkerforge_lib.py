@@ -173,11 +173,15 @@ class TFH:
         self.operation_mode = True
         self.main_loop = Thread(target=self.__loop)
         self.main_loop.start()
-
         # @Todo create flags for this with different fail safe and operational mode
+        
     def cleanup(self):
-        # @TODO: defenitely an argument to set values to something like a defined failsafe/shutdown state
         self.run = False
+        sleep(0.2)
+        for uid, output_dev in self.outputs.items():
+            for index in range(output_dev.output_cnt):
+                output_dev.val[index] = 0
+        self.__manage_outputs()
 
     def __loop(self):
         print("starting main loop")
