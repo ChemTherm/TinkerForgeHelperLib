@@ -134,7 +134,7 @@ class TFH:
             self.uid = uid
             self.dev = None
             self.output_cnt = output_cnt
-            self.val = [0] * output_cnt
+            self.values = [0] * output_cnt
             self.ioType = TFH.OutputDevice
 
     class DualRelay(OutputDevice):
@@ -174,13 +174,13 @@ class TFH:
         self.main_loop = Thread(target=self.__loop)
         self.main_loop.start()
         # @Todo create flags for this with different fail safe and operational mode
-        
+
     def cleanup(self):
         self.run = False
         sleep(0.2)
         for uid, output_dev in self.outputs.items():
             for index in range(output_dev.output_cnt):
-                output_dev.val[index] = 0
+                output_dev.values[index] = 0
         self.__manage_outputs()
 
     def __loop(self):
@@ -215,12 +215,12 @@ class TFH:
             print(f"{control_name}: in - {input_val} - {converted_value}")
 
             soll_input = 0
-            self.outputs[output_device_uid].val[output_channel] = input_val
+            self.outputs[output_device_uid].values[output_channel] = input_val
 
             # a 0 value is technically False but ... not a sensible value either
             permissable_deviation = control_rule.get("permissible_deviation", False)
             if permissable_deviation:
-                delta = abs(input_val - self.outputs[output_device_uid].val[output_channel])
+                delta = abs(input_val - self.outputs[output_device_uid].values[output_channel])
                 if delta > permissable_deviation * soll_input:
                     last_deviation = self.controls[control_name].get("last_deviation")
 
@@ -263,7 +263,7 @@ class TFH:
                       f"{device_identifier_types.get(output_dev.device_type, 'unknown device type')} has been lost "
                       f"{exp}")
             try:
-                output_dev.dev.set_voltage(output_dev.val[0])
+                output_dev.dev.set_voltage(output_dev.values[0])
                 # @TODO there needs to be a check on the channels and device specific fncs/class or whatever
                 # output_dev.obj.set_voltage(output_dev.val[1])
             except Exception as exp:
@@ -357,17 +357,29 @@ class TFH:
 
         device_identifier = device_entry.get("device_identifier")
 
+        old_values = False
+        for IO_dict in [self.inputs, self.outputs]:
+            try:
+                old_values = IO_dict[uid].values
+                break
+            except (KeyError, AttributeError):
+                pass
+
         match device_identifier:
             case 2120:
-                self.inputs[uid] = self.IndustrialDual020mAV2(uid, self.conn)
+                dev = self.inputs[uid] = self.IndustrialDual020mAV2(uid, self.conn)
             case 2121:
-                self.inputs[uid] = self.IndustrialDualAnalogInV2(uid, self.conn)
+                dev = self.inputs[uid] = self.IndustrialDualAnalogInV2(uid, self.conn)
             case 2116:
-                self.outputs[uid] = self.IndustrialAnalogOutV2(uid, self.conn)
+                dev = self.outputs[uid] = self.IndustrialAnalogOutV2(uid, self.conn)
 
             case _:
                 print(f"{uid} failed to setup device due to unknown device type {device_identifier}")
                 exit()
+
+        if old_values:
+            dev.values = old_values
+            
         print(f"successfully setup device {uid} - "
               f"{device_identifier_types.get(device_identifier, 'unknown device type')}")
 
