@@ -29,7 +29,8 @@ from threading import Thread
 '''
 @ TODO: 🔲 ✅
  🔲 check the super init bevhiour in regards to setting a value after before super
- 🔲 master brick reconnect handling 
+ ✅ master brick reconnect handling 
+ 🔲 reinstate something state for more indepth for failure mode
  🔲 rework manageoutputs? the dual relay may need to work differently or get a fnc to set the outputs
  ✅make a listing of linked devices in case of connection loss for failsafes?
 
@@ -74,6 +75,10 @@ def get_config(config_name):
 
 
 class TFH:
+    class OperationModes(IntEnum):
+        normalMode = 0
+        dummyMode = 1
+
     class IOtypes(IntEnum):
         inputDevice = 1
         outputDevice = 2
@@ -130,7 +135,7 @@ class TFH:
                 self.current_channel = 0
 
     class OutputDevice:
-        def __init__(self, uid,  output_cnt):
+        def __init__(self, uid, output_cnt):
             self.uid = uid
             self.dev = None
             self.output_cnt = output_cnt
@@ -156,21 +161,20 @@ class TFH:
             self.dev.set_enabled(True)
             self.dev.set_out_led_status_config(0, 5000, 1)
 
-    def __init__(self, ip, port, config_name=False, debug=False):
+    def __init__(self, ip, port, config_name=False, debug_mode=OperationModes.normalMode):
         self.conn = IPConnection()
         self.conn.connect(ip, port)
         self.conn.register_callback(IPConnection.CALLBACK_ENUMERATE, self.cb_enumerate)
         # may be renamed or localized, keeping it for now
         self.devices_present = {}
         self.devices_required = set()
-        self.debugMode = debug
+        self.operation_mode = debug_mode
         self.config = get_config(config_name)
         self.inputs = {}
         self.outputs = {}
         self.controls = {}
         self.verify_config_devices()
         self.run = True
-        self.operation_mode = True
         self.main_loop = Thread(target=self.__loop)
         self.main_loop.start()
         # @Todo create flags for this with different fail safe and operational mode
@@ -239,13 +243,11 @@ class TFH:
         purely managing timeouts and failsafe, the reading of values is done by the callbacks
         """
         now = dt.now()
-        self.operation_mode = True
 
         for uid, input_dev in self.inputs.items():
             input_dev.operational = True
             delta = now - input_dev.activity_timestamp
             if delta > input_dev.timeout:
-                self.operation_mode = False
                 input_dev.operational = False
                 print(f"timeout detected from uid {uid} {input_dev.activity_timestamp}, going failsafe")
 
