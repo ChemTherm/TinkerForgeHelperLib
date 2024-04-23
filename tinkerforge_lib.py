@@ -357,13 +357,10 @@ class TFH:
 
         device_identifier = device_entry.get("device_identifier")
 
-        old_values = False
-        for IO_dict in [self.inputs, self.outputs]:
-            try:
-                old_values = IO_dict[uid].values
-                break
-            except (KeyError, AttributeError):
-                pass
+        try:
+            old_values = self.outputs[uid].values
+        except (KeyError, AttributeError):
+            old_values = False
 
         match device_identifier:
             case 2120:
