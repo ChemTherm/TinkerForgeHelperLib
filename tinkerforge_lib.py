@@ -79,6 +79,13 @@ class TFH:
         normalMode = 0
         dummyMode = 1
 
+    # where to use those / apply to what? IO? controls?
+    class WarningLevels(IntEnum):
+        normal = 0
+        failOperational = 1
+        failSafe = 2
+        shutdown = 4    # TBD
+
     class IOtypes(IntEnum):
         inputDevice = 1
         outputDevice = 2
@@ -195,6 +202,9 @@ class TFH:
             self.__manage_outputs()
             sleep(0.1)
 
+    def __run_failsafe_control(self):
+        pass
+
     def __run_controls(self):
         for control_name, control_rule in self.config.items():
             # presence of these is already checked in verify_config_devices, not the value type
@@ -202,6 +212,10 @@ class TFH:
             input_device_uid = control_rule.get("input_device")
             output_channel = control_rule.get("output_channel")
             output_device_uid = control_rule.get("output_device")
+
+            if not self.inputs[input_device_uid].operational:
+                self.__run_failsafe_control()
+                continue
 
             gradient = control_rule.get("gradient")
             x = control_rule.get("x")
@@ -213,7 +227,6 @@ class TFH:
                     print("missing control config")
                     exit()
 
-            # print(self.inputs[input_device_uid].values[input_channel])
             input_val = self.inputs[input_device_uid].values[input_channel]
             converted_value = (input_val - y) * gradient
             print(f"{control_name}: in - {input_val} - {converted_value}")
@@ -249,7 +262,9 @@ class TFH:
             delta = now - input_dev.activity_timestamp
             if delta > input_dev.timeout:
                 input_dev.operational = False
-                print(f"timeout detected from uid {uid} {input_dev.activity_timestamp}, going failsafe")
+                for i in range(input_dev.input_cnt):
+                    input_dev.values[i] = "NAN"
+                print(f"timeout detected from uid {uid} {input_dev.activity_timestamp}")
 
     def __manage_outputs(self):
         """
