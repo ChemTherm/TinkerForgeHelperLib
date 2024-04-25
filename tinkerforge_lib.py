@@ -5,6 +5,7 @@ from datetime import datetime as dt
 from datetime import timedelta
 from enum import IntEnum
 
+from tinkerforge.brick_silent_stepper import BrickSilentStepper
 from tinkerforge.bricklet_thermocouple_v2 import BrickletThermocoupleV2
 from tinkerforge.bricklet_industrial_digital_out_4_v2 import BrickletIndustrialDigitalOut4V2
 from tinkerforge.bricklet_industrial_analog_out_v2 import BrickletIndustrialAnalogOutV2
@@ -13,6 +14,7 @@ from tinkerforge.bricklet_analog_out_v3 import BrickletAnalogOutV3
 from tinkerforge.bricklet_industrial_dual_analog_in_v2 import BrickletIndustrialDualAnalogInV2
 from tinkerforge.bricklet_industrial_dual_0_20ma_v2 import BrickletIndustrialDual020mAV2
 from tinkerforge.bricklet_industrial_dual_relay import BrickletIndustrialDualRelay
+from tinkerforge.bricklet_industrial_digital_in_4_v2 import BrickletIndustrialDigitalIn4V2
 
 import json
 
@@ -20,7 +22,7 @@ from time import sleep
 
 # unused imports just keeping them around for now
 
-# from tinkerforge.bricklet_industrial_dual_relay import BrickletIndustrialDualRelay
+
 
 from tinkerforge.ip_connection import IPConnection
 from tinkerforge.ip_connection import Error as IPConnError
@@ -153,7 +155,6 @@ class TFH:
         device_type = 284
 
         def __init__(self, uid, conn):
-            self.uid = uid
             super().__init__(uid, 2)
             self.dev = BrickletIndustrialDualRelay(uid, conn)
 
@@ -161,12 +162,20 @@ class TFH:
         device_type = 2116
 
         def __init__(self, uid, conn):
-            self.uid = uid
             super().__init__(uid, 2)
             self.dev = BrickletIndustrialAnalogOutV2(uid, conn)
             self.dev.set_voltage(0)
             self.dev.set_enabled(True)
             self.dev.set_out_led_status_config(0, 5000, 1)
+
+    class SilentStepper:
+        device_type = 19
+
+        def __init__(self, uid, conn):
+            pass
+            # super().__init__(uid, output_cnt=)
+
+    class
 
     def __init__(self, ip, port, config_name=False, debug_mode=OperationModes.normalMode):
         self.conn = IPConnection()
@@ -343,10 +352,11 @@ class TFH:
         # print("Enumeration Type triggered:  " + str(enumeration_type))
 
         # This only triggers when the master brick disconnects it seems
+
         if enumeration_type == IPConnection.ENUMERATION_TYPE_DISCONNECTED:
             # @Todo: device identifier is already known, catch it from devices_present
             print(f"Disconnect detected from device: {uid} - "
-                  f"{device_identifier_types.get(device_identifier, 'unknown device type')}")
+                  f"{device_identifier_name}")
             return
 
         if uid not in self.devices_present.keys():
@@ -380,11 +390,11 @@ class TFH:
             old_values = False
 
         match device_identifier:
-            case 2120:
+            case self.IndustrialDual020mAV2.device_type:
                 dev = self.inputs[uid] = self.IndustrialDual020mAV2(uid, self.conn)
-            case 2121:
+            case self.IndustrialDualAnalogInV2.device_type:
                 dev = self.inputs[uid] = self.IndustrialDualAnalogInV2(uid, self.conn)
-            case 2116:
+            case self.IndustrialAnalogOutV2.device_type:
                 dev = self.outputs[uid] = self.IndustrialAnalogOutV2(uid, self.conn)
 
             case _:
