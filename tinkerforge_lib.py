@@ -244,10 +244,10 @@ class TFH:
             self.outputs[output_device_uid].values[output_channel] = input_val
 
             # a 0 value is technically False but ... not a sensible value either
-            permissable_deviation = control_rule.get("permissible_deviation", False)
-            if permissable_deviation:
+            permissible_deviation = control_rule.get("permissible_deviation", False)
+            if permissible_deviation:
                 delta = abs(input_val - self.outputs[output_device_uid].values[output_channel])
-                if delta > permissable_deviation * soll_input:
+                if delta > permissible_deviation * soll_input:
                     last_deviation = self.controls[control_name].get("last_deviation")
 
                     if last_deviation and last_deviation - dt.now() > timedelta(seconds=30):
