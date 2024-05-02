@@ -1,9 +1,12 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+
 import logging
 from datetime import datetime as dt
 from datetime import timedelta
 from enum import IntEnum
+import json
+from time import sleep
 
 from tinkerforge.brick_silent_stepper import BrickSilentStepper
 from tinkerforge.bricklet_thermocouple_v2 import BrickletThermocoupleV2
@@ -18,14 +21,6 @@ from tinkerforge.bricklet_industrial_digital_in_4_v2 import BrickletIndustrialDi
 
 import control_presets
 
-import json
-
-from time import sleep
-
-# unused imports just keeping them around for now
-
-
-
 from tinkerforge.ip_connection import IPConnection
 from tinkerforge.ip_connection import Error as IPConnError
 from threading import Thread
@@ -34,8 +29,6 @@ from threading import Thread
 @ TODO: 🔲 ✅
  🔲 check the super init bevhiour in regards to setting a value after before super
  ✅ master brick reconnect handling 
- 🔲 reinstate something state for more indepth for failure mode
- 🔲 rework manageoutputs? the dual relay may need to work differently or get a fnc to set the outputs
  ✅make a listing of linked devices in case of connection loss for failsafes?
 
 disconnects: the disconnects of the master brick gets detected the others fails siltently 
@@ -181,7 +174,7 @@ class TFH:
         self.conn = IPConnection()
         self.conn.connect(ip, port)
         self.conn.register_callback(IPConnection.CALLBACK_ENUMERATE, self.cb_enumerate)
-        # may be renamed or localized, keeping it for now
+
         self.devices_present = {}
         self.devices_required = set()
         self.operation_mode = debug_mode
@@ -190,10 +183,11 @@ class TFH:
         self.outputs = {}
         self.controls = {}
         self.verify_config_devices()
+
         self.run = True
         self.main_loop = Thread(target=self.__loop)
         self.main_loop.start()
-        # @Todo create flags for this with different fail safe and operational mode
+
 
     def cleanup(self):
         self.run = False
@@ -296,17 +290,17 @@ class TFH:
                 print(exp)
 
     def verify_config_devices(self):
-        print("listing devices present: \n")
-        # @todo define required and optional device from parsing
         """
         collects the UIDs of the connected device and checks against the listing of UIDs given from the config
         If not every required device is given an Error is given
         """
+
+        print("listing devices present: \n")
+        # @todo define required and optional device from parsing
+
         self.conn.enumerate()
         sleep(0.2)
-        # self.conn.disconnect()
 
-        # found no obvious way to check the main connection lets throw an error when no devices are found
         if not len(self.devices_present):
             raise ConnectionError("No Tinkerforge module found, check connection to master brick")
 
@@ -344,15 +338,9 @@ class TFH:
             if uid not in self.devices_present:
                 raise ModuleNotFoundError(f"Missing Tinkerforge Element: {uid}")
         print("\nvalid setup for configured initialisation detected \n")
-        # maybe make a secondary list for optional, and then throw a warning
-        # do we need a device identifier check? what happen to TF elements if we go wrong?
 
     def cb_enumerate(self, uid, connected_uid, _, hardware_version, firmware_version,
                      device_identifier, enumeration_type):
-
-        # print("Enumeration Type triggered:  " + str(enumeration_type))
-
-        # This only triggers when the master brick disconnects it seems
 
         if enumeration_type == IPConnection.ENUMERATION_TYPE_DISCONNECTED:
             # @Todo: device identifier is already known, catch it from devices_present
@@ -373,7 +361,6 @@ class TFH:
         else:
             print(f"reconnect detected from device: {uid} - "
                   f"{device_identifier_types.get(device_identifier, 'unknown device type')}")
-            # only if the device is required/was used before its getting reconnected
             if uid in self.devices_required:
                 self.setup_device(uid)
 
