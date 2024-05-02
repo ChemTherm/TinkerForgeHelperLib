@@ -16,6 +16,8 @@ from tinkerforge.bricklet_industrial_dual_0_20ma_v2 import BrickletIndustrialDua
 from tinkerforge.bricklet_industrial_dual_relay import BrickletIndustrialDualRelay
 from tinkerforge.bricklet_industrial_digital_in_4_v2 import BrickletIndustrialDigitalIn4V2
 
+import control_presets
+
 import json
 
 from time import sleep
@@ -175,8 +177,6 @@ class TFH:
             pass
             # super().__init__(uid, output_cnt=)
 
-    class
-
     def __init__(self, ip, port, config_name=False, debug_mode=OperationModes.normalMode):
         self.conn = IPConnection()
         self.conn.connect(ip, port)
@@ -312,8 +312,9 @@ class TFH:
 
         channels_required = {}
         for device_key, value in self.config.items():
-            print(device_key)
-            # @TODO: this will become device specific at some point
+            print(f"checking devices for {device_key}")
+
+            # @TODO: tie this into the control_presets
             if not all(key in value for key in ("input_device", "input_channel", "output_device", "output_channel")):
                 print(f"invalid config for device {device_key} due to missing parameter")
                 exit()
