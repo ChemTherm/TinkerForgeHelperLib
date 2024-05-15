@@ -138,6 +138,28 @@ class TFH:
             else:
                 self.current_channel = 0
 
+    class ThermoCouple(InputDevice):
+        device_type = 2109
+        
+        def __init__(self, uid, conn):
+            super().__init__(uid, 1)
+            self.dev = BrickletThermocoupleV2(uid, conn)
+            self.dev.register_callback(self.dev.CALLBACK_TEMPERATURE, self.collect_temperature)
+            self.dev.set_temperature_callback_configuration(1000, False, "x", 0, 0)
+
+        def collect_temperature(self):
+            self.values[0] = self.dev.get_temperature()
+
+    # @TODO: complete this
+    class IndustrialDigitalIn4(InputDevice):
+        device_type = 2100
+        
+        def __init__(self, uid, conn):
+            super().__init__(uid, 4)
+            self.dev = BrickletIndustrialDigitalIn4V2(uid, conn)
+            #
+
+
     class OutputDevice:
         def __init__(self, uid, output_cnt):
             self.uid = uid
@@ -163,12 +185,17 @@ class TFH:
             self.dev.set_enabled(True)
             self.dev.set_out_led_status_config(0, 5000, 1)
 
-    class SilentStepper:
+    class SilentStepper(OutputDevice):
+        # @todo TBD: running with callback instead
         device_type = 19
 
         def __init__(self, uid, conn):
-            pass
-            # super().__init__(uid, output_cnt=)
+            super().__init__(uid, 1)
+            self.dev = BrickSilentStepper(uid, conn)
+            self.dev.enable()
+
+        def stop(self):
+            self.dev.stop()
 
     def __init__(self, ip, port, config_name=False, debug_mode=OperationModes.normalMode):
         self.conn = IPConnection()
@@ -188,13 +215,16 @@ class TFH:
         self.main_loop = Thread(target=self.__loop)
         self.main_loop.start()
 
-
     def cleanup(self):
         self.run = False
         sleep(0.2)
         for uid, output_dev in self.outputs.items():
             for index in range(output_dev.output_cnt):
                 output_dev.values[index] = 0
+            try:
+                output_dev.stop()
+            except AttributeError:
+                pass
         self.__manage_outputs()
 
     def __loop(self):
