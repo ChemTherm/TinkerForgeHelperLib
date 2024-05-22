@@ -24,6 +24,7 @@ import control_presets
 from tinkerforge.ip_connection import IPConnection
 from tinkerforge.ip_connection import Error as IPConnError
 from threading import Thread
+import inspect
 
 '''
 @ TODO: 🔲 ✅
@@ -213,6 +214,16 @@ class TFH:
         self.run = True
         self.main_loop = Thread(target=self.__loop)
         self.main_loop.start()
+
+    def get_io_cls(self, parent_cls, device_identifier):
+        """
+        returns the child cls of a given device identifier, if none matches it returns None
+        """
+        for name, obj in inspect.getmembers(self):
+            if hasattr(obj, "__bases__") and parent_cls in obj.__bases__:
+                if obj.device_type == device_identifier:
+                    return obj
+        return None
 
     def cleanup(self):
         self.run = False
@@ -406,17 +417,15 @@ class TFH:
         except (KeyError, AttributeError):
             old_values = False
 
-        match device_identifier:
-            case self.IndustrialDual020mAV2.device_type:
-                dev = self.inputs[uid] = self.IndustrialDual020mAV2(uid, self.conn)
-            case self.IndustrialDualAnalogInV2.device_type:
-                dev = self.inputs[uid] = self.IndustrialDualAnalogInV2(uid, self.conn)
-            case self.IndustrialAnalogOutV2.device_type:
-                dev = self.outputs[uid] = self.IndustrialAnalogOutV2(uid, self.conn)
-            case self.ThermoCouple.device_type:
-                dev = self.inputs[uid] = self.ThermoCouple(uid, self.conn)
-
-            case _:
+        print(f"device_identifier {device_identifier}")
+        cls = self.get_io_cls(TFH.InputDevice, device_identifier)
+        if cls is not None:
+            dev = self.inputs[uid] = cls(uid, self.conn)
+        else:
+            cls = self.get_io_cls(TFH.OutputDevice, device_identifier)
+            if cls is not None:
+                dev = self.outputs[uid] = cls(uid, self.conn)
+            else:
                 print(f"{uid} failed to setup device due to unknown device type {device_identifier}")
                 exit()
 
