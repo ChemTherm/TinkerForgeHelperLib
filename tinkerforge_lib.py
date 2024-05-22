@@ -318,10 +318,14 @@ class TFH:
             # @Todo: this only works for this specific device
             try:
                 _ = output_dev.dev.get_enabled()
+            except AttributeError as _:
+                # some devices like BrickletIndustrialDualRelay do not support this method
+                pass
             except IPConnError as exp:
                 print(f"connection to output {uid} - "
                       f"{device_identifier_types.get(output_dev.device_type, 'unknown device type')} has been lost "
                       f"{exp}")
+            # @TODO: this will require device specific fncs
             try:
                 output_dev.dev.set_voltage(output_dev.values[0])
                 # @TODO there needs to be a check on the channels and device specific fncs/class or whatever
