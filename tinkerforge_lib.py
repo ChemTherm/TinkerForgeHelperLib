@@ -145,10 +145,11 @@ class TFH:
             super().__init__(uid, 1)
             self.dev = BrickletThermocoupleV2(uid, conn)
             self.dev.register_callback(self.dev.CALLBACK_TEMPERATURE, self.collect_temperature)
-            self.dev.set_temperature_callback_configuration(1000, False, "x", 0, 0)
+            self.dev.set_temperature_callback_configuration(100, False, "x", 0, 0)
 
-        def collect_temperature(self):
-            self.values[0] = self.dev.get_temperature()
+        def collect_temperature(self, temperature):
+            self.values[0] = temperature/100
+            self.activity_timestamp = dt.now()
 
     # @TODO: complete this
     class IndustrialDigitalIn4(InputDevice):
@@ -157,8 +158,6 @@ class TFH:
         def __init__(self, uid, conn):
             super().__init__(uid, 4)
             self.dev = BrickletIndustrialDigitalIn4V2(uid, conn)
-            #
-
 
     class OutputDevice:
         def __init__(self, uid, output_cnt):
@@ -414,6 +413,8 @@ class TFH:
                 dev = self.inputs[uid] = self.IndustrialDualAnalogInV2(uid, self.conn)
             case self.IndustrialAnalogOutV2.device_type:
                 dev = self.outputs[uid] = self.IndustrialAnalogOutV2(uid, self.conn)
+            case self.ThermoCouple.device_type:
+                dev = self.inputs[uid] = self.ThermoCouple(uid, self.conn)
 
             case _:
                 print(f"{uid} failed to setup device due to unknown device type {device_identifier}")
