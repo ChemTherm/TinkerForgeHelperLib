@@ -19,8 +19,6 @@ from tinkerforge.bricklet_industrial_dual_0_20ma_v2 import BrickletIndustrialDua
 from tinkerforge.bricklet_industrial_dual_relay import BrickletIndustrialDualRelay
 from tinkerforge.bricklet_industrial_digital_in_4_v2 import BrickletIndustrialDigitalIn4V2
 
-import control_presets
-
 from tinkerforge.ip_connection import IPConnection
 from tinkerforge.ip_connection import Error as IPConnError
 from threading import Thread
