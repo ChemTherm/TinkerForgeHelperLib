@@ -101,12 +101,15 @@ class TFH:
             self.timeout = timeout
             self.ioType = 0
 
+        def reset_activity(self):
+            self.activity_timestamp = dt.now()
+
         def collect_all(self, _args):
             for i, value in enumerate(_args):
                 # print(f"reading input on device {self.uid} - {i} {value}")
                 self.values[i] = value
             # @Todo: is there a less costly check?
-            self.activity_timestamp = dt.now()
+            self.reset_activity()
 
     class IndustrialDualAnalogInV2(InputDevice):
         device_type = 2121
@@ -130,7 +133,7 @@ class TFH:
 
         def collect_single_current(self, channel, value):
             self.values[channel] = value
-            self.activity_timestamp = dt.now()
+            self.reset_activity()
             print(f"reading input on device {self.uid} - {channel} {value}")
             if channel < self.input_cnt:
                 self.current_channel += 1
