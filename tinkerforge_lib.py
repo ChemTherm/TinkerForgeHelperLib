@@ -151,15 +151,27 @@ class TFH:
 
         def collect_temperature(self, temperature):
             self.values[0] = temperature/100
-            self.activity_timestamp = dt.now()
+            self.reset_activity()
 
     # @TODO: complete this
     class IndustrialDigitalIn4(InputDevice):
         device_type = 2100
+
+        def cb_value(self, channel, changed, value):
+            self.values[channel] = value
+            self.reset_activity()
         
         def __init__(self, uid, conn):
             super().__init__(uid, 4)
             self.dev = BrickletIndustrialDigitalIn4V2(uid, conn)
+            self.dev.register_callback(self.dev.CALLBACK_VALUE, self.cb_value)
+            self.dev.set_value_callback_configuration(0, 100, False)
+            self.dev.set_value_callback_configuration(1, 100, False)
+            self.dev.set_value_callback_configuration(2, 100, False)
+            self.dev.set_value_callback_configuration(3, 100, False)
+            # TODO: consider configurations
+            # Configureing rising edge count (channel 3) with 10ms debounce
+            # self.dev.set_edge_count_configuration(3, 0, 10)
 
     class OutputDevice:
         def __init__(self, uid, output_cnt):
