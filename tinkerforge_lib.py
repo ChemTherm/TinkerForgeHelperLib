@@ -186,7 +186,11 @@ class TFH:
 
         def __init__(self, uid, conn):
             super().__init__(uid, 2)
+            self.values = [False] * 2
             self.dev = BrickletIndustrialDualRelay(uid, conn)
+
+        def set_outputs(self):
+            self.dev.set_value(*self.values)
 
     class IndustrialAnalogOutV2(OutputDevice):
         device_type = 2116
@@ -197,6 +201,16 @@ class TFH:
             self.dev.set_voltage(0)
             self.dev.set_enabled(True)
             self.dev.set_out_led_status_config(0, 5000, 1)
+
+    class IndustrialDigitalOut4(OutputDevice):
+        device_type = 2124
+
+        def __init__(self, uid, conn):
+            super().__init__(uid, 4)
+            self.dev = BrickletIndustrialDigitalOut4V2(uid, conn)
+
+        def set_outputs(self):
+            self.dev.set_value(self.values)
 
     class SilentStepper(OutputDevice):
         # @todo TBD: running with callback instead
@@ -339,6 +353,12 @@ class TFH:
                       f"{device_identifier_types.get(output_dev.device_type, 'unknown device type')} has been lost "
                       f"{exp}")
             # @TODO: this will require device specific fncs
+            try:
+                output_dev.set_outputs()
+                continue
+            except AttributeError:
+                pass
+
             try:
                 output_dev.dev.set_voltage(output_dev.values[0])
                 # @TODO there needs to be a check on the channels and device specific fncs/class or whatever
