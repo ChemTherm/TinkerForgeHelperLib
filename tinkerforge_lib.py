@@ -64,7 +64,7 @@ def get_config(config_name):
         exit()
     else:
         try:
-            import testing.json_files.config as cfg
+            import src.config as cfg
             return cfg.config
         except ModuleNotFoundError:
             exit("no backup python config present, exiting")
@@ -385,29 +385,68 @@ class TFH:
         for device_key, value in self.config.items():
             print(f"checking devices for {device_key}")
 
-            # @TODO: tie this into the control_presets
-            if not all(key in value for key in ("input_device", "input_channel", "output_device", "output_channel")):
-                print(f"invalid config for device {device_key} due to missing parameter")
-                exit()
+            if value["type"] == "ExtOutput":
+                if not all(key in value for key in ("output_device", "output_channel")):
+                    print(f"invalid config for device {device_key} due to missing parameter")
+                    exit()
 
-            self.controls[device_key] = self.Control()
-            input_uid = value.get("input_device")
-            output_uid = value.get("output_device")
-            used_input_channels = channels_required.get(input_uid, [])
-            used_output_channels = channels_required.get(output_uid, [])
-            req_input_chann = value.get("input_channel")
-            req_output_chann = value.get("input_channel")
-            if req_input_chann in used_input_channels or req_output_chann in used_output_channels:
-                print(f"invalid config: {device_key} has overlapping channels with previous configured devices")
-                exit()
-            used_output_channels.append(req_output_chann)
-            used_input_channels.append(req_input_chann)
-            channels_required[input_uid] = used_input_channels
-            channels_required[output_uid] = used_output_channels
+                self.controls[device_key] = self.Control()
+                output_uid = value.get("output_device")
+                used_output_channels = channels_required.get(output_uid, [])
+                req_output_chann = value.get("input_channel")
+                if  req_output_chann in used_output_channels:
+                    print(f"invalid config: {device_key} has overlapping channels with previous configured devices")
+                    exit()
+                used_output_channels.append(req_output_chann)
+                channels_required[output_uid] = used_output_channels
+                print("VALID config!")
+                self.devices_required.add(output_uid)
 
-            print("VALID config!")
-            self.devices_required.add(input_uid)
-            self.devices_required.add(output_uid)
+
+            elif value["type"] == "ExtInput":
+                if not all(key in value for key in ("input_device", "input_channel")):
+                    print(f"invalid config for device {device_key} due to missing parameter")
+                    exit()
+
+                self.controls[device_key] = self.Control()
+                input_uid = value.get("input_device")
+                used_input_channels = channels_required.get(input_uid, [])
+                req_input_chann = value.get("input_channel")
+                if req_input_chann in used_input_channels :
+                    print(f"invalid config: {device_key} has overlapping channels with previous configured devices")
+                    exit()
+                used_input_channels.append(req_input_chann)
+                channels_required[input_uid] = used_input_channels
+
+                print("VALID config!")
+                self.devices_required.add(input_uid)
+
+
+
+            else:    
+                # @TODO: tie this into the control_presets
+                if not all(key in value for key in ("input_device", "input_channel", "output_device", "output_channel")):
+                    print(f"invalid config for device {device_key} due to missing parameter")
+                    exit()
+
+                self.controls[device_key] = self.Control()
+                input_uid = value.get("input_device")
+                output_uid = value.get("output_device")
+                used_input_channels = channels_required.get(input_uid, [])
+                used_output_channels = channels_required.get(output_uid, [])
+                req_input_chann = value.get("input_channel")
+                req_output_chann = value.get("input_channel")
+                if req_input_chann in used_input_channels or req_output_chann in used_output_channels:
+                    print(f"invalid config: {device_key} has overlapping channels with previous configured devices")
+                    exit()
+                used_output_channels.append(req_output_chann)
+                used_input_channels.append(req_input_chann)
+                channels_required[input_uid] = used_input_channels
+                channels_required[output_uid] = used_output_channels
+
+                print("VALID config!")
+                self.devices_required.add(input_uid)
+                self.devices_required.add(output_uid)
 
         self.setup_devices()
 
