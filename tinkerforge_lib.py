@@ -453,7 +453,7 @@ class TFH:
         self.setup_devices()
 
         for uid in self.devices_required:
-            if uid not in self.devices_present:
+            if uid not in self.devices_present and self.operation_mode == 0:
                 raise ModuleNotFoundError(f"Missing Tinkerforge Element: {uid}")
         print("\nvalid setup for configured initialisation detected \n")
 
@@ -486,6 +486,8 @@ class TFH:
         device_entry = self.devices_present.get(uid)
         if device_entry is None:
             print(f"Setup of not present device requested {uid}")
+            if ( self.operation_mode) == 1: #debug Mode
+                print(f"Setup device  {uid} as dummy")                
             return
 
         device_identifier = device_entry.get("device_identifier")
