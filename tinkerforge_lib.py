@@ -283,6 +283,8 @@ class TFH:
             output_channel = control_rule.get("output_channel")
             output_device_uid = control_rule.get("output_device")
 
+            if self.operation_mode == 1:
+                continue
             if not self.inputs[input_device_uid].operational:
                 self.__run_failsafe_control()
                 continue
