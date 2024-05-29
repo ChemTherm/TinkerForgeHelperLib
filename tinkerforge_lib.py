@@ -300,11 +300,7 @@ class TFH:
                     exit()
 
             input_val = self.inputs[input_device_uid].values[input_channel]
-            converted_value = (input_val - y) * gradient
-            print(f"{control_name}: in - {input_val} - {converted_value}")
-
-            soll_input = 0
-            self.outputs[output_device_uid].values[output_channel] = input_val
+            
 
             # a 0 value is technically False but ... not a sensible value either
             permissible_deviation = control_rule.get("permissible_deviation", False)
