@@ -291,7 +291,7 @@ class TFH:
             output_channel = control_rule.get("output_channel")
             output_device_uid = control_rule.get("output_device")
 
-            if self.operation_mode == 1 or input_device_uid is None or control_rule.get("type") == "heater-PID":
+            if self.operation_mode == 1 or input_device_uid is None or control_rule.get("type") == "easy_PI":
                 continue
             if not self.inputs[input_device_uid].operational:
                 self.__run_failsafe_control()
@@ -381,7 +381,7 @@ class TFH:
         for device_key, value in self.config.items():
             print(f"checking devices for {device_key}")
 
-            if value["type"] in ["ExtOutput", "valve", "heater-PID"]:
+            if value["type"] in ["ExtOutput", "valve", "easy_PI"]:
                 if not all(key in value for key in ("output_device", "output_channel")):
                     print(f"invalid config for device {device_key} due to missing parameter")
                     exit()
