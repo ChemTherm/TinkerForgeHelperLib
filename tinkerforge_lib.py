@@ -211,6 +211,11 @@ class TFH:
         def __init__(self, uid, conn):
             super().__init__(uid, 4)
             self.dev = BrickletIndustrialDigitalOut4V2(uid, conn)
+            self.frequency = 10
+            self.dev.set_pwm_configuration(0, self.frequency, 0)
+            self.dev.set_pwm_configuration(1, self.frequency, 0)
+            self.dev.set_pwm_configuration(2, self.frequency, 0)
+            self.dev.set_pwm_configuration(3, self.frequency, 0)
 
         def set_outputs(self):
             self.dev.set_value(self.values)
