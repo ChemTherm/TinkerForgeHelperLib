@@ -143,9 +143,12 @@ class TFH:
     class ThermoCouple(InputDevice):
         device_type = 2109
         
-        def __init__(self, uid, conn):
+        def __init__(self, uid, conn, typ ='N'):
             super().__init__(uid, 1)
-            self.dev = BrickletThermocoupleV2(uid, conn)
+            self.dev = BrickletThermocoupleV2(uid, conn)        
+            type_dict = {'B' : 0, 'E' : 1, 'J' : 2, 'K' : 3, 'N' : 4, 'R' : 5, 'S' : 6, 'T' : 7}
+            thermocouple_type = type_dict[typ]
+            self.dev.set_configuration(16, thermocouple_type, 0)
             self.dev.register_callback(self.dev.CALLBACK_TEMPERATURE, self.collect_temperature)
             self.dev.set_temperature_callback_configuration(100, False, "x", 0, 0)
 
@@ -283,21 +286,11 @@ class TFH:
             output_channel = control_rule.get("output_channel")
             output_device_uid = control_rule.get("output_device")
 
-            if self.operation_mode == 1 or input_device_uid is None:
+            if self.operation_mode == 1 or input_device_uid is None or control_rule.get("type") == "heater-PID":
                 continue
             if not self.inputs[input_device_uid].operational:
                 self.__run_failsafe_control()
                 continue
-
-            gradient = control_rule.get("gradient")
-            x = control_rule.get("x")
-            y = control_rule.get("y")
-
-            # @TODO: needs to be neater
-            for element in [gradient, x, y]:
-                if element is None:
-                    print("missing control config")
-                    exit()
 
             input_val = self.inputs[input_device_uid].values[input_channel]
             
