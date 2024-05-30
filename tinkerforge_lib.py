@@ -134,7 +134,7 @@ class TFH:
         def collect_single_current(self, channel, value):
             self.values[channel] = value
             self.reset_activity()
-            print(f"reading input on device {self.uid} - {channel} {value}")
+            #print(f"reading input on device {self.uid} - {channel} {value}")
             if channel < self.input_cnt:
                 self.current_channel += 1
             else:
@@ -283,7 +283,7 @@ class TFH:
             output_channel = control_rule.get("output_channel")
             output_device_uid = control_rule.get("output_device")
 
-            if self.operation_mode == 1:
+            if self.operation_mode == 1 or input_device_uid is None:
                 continue
             if not self.inputs[input_device_uid].operational:
                 self.__run_failsafe_control()
