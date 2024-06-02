@@ -64,7 +64,7 @@ def get_config(config_name):
         exit()
     else:
         try:
-            import testing.json_files.config as cfg
+            import src.config as cfg
             return cfg.config
         except ModuleNotFoundError:
             exit("no backup python config present, exiting")
@@ -134,7 +134,7 @@ class TFH:
         def collect_single_current(self, channel, value):
             self.values[channel] = value
             self.reset_activity()
-            print(f"reading input on device {self.uid} - {channel} {value}")
+            #print(f"reading input on device {self.uid} - {channel} {value}")
             if channel < self.input_cnt:
                 self.current_channel += 1
             else:
@@ -143,9 +143,12 @@ class TFH:
     class ThermoCouple(InputDevice):
         device_type = 2109
         
-        def __init__(self, uid, conn):
+        def __init__(self, uid, conn, typ ='N'):
             super().__init__(uid, 1)
-            self.dev = BrickletThermocoupleV2(uid, conn)
+            self.dev = BrickletThermocoupleV2(uid, conn)        
+            type_dict = {'B' : 0, 'E' : 1, 'J' : 2, 'K' : 3, 'N' : 4, 'R' : 5, 'S' : 6, 'T' : 7}
+            thermocouple_type = type_dict[typ]
+            self.dev.set_configuration(16, thermocouple_type, 0)
             self.dev.register_callback(self.dev.CALLBACK_TEMPERATURE, self.collect_temperature)
             self.dev.set_temperature_callback_configuration(100, False, "x", 0, 0)
 
@@ -208,6 +211,11 @@ class TFH:
         def __init__(self, uid, conn):
             super().__init__(uid, 4)
             self.dev = BrickletIndustrialDigitalOut4V2(uid, conn)
+            self.frequency = 10
+            self.dev.set_pwm_configuration(0, self.frequency, 0)
+            self.dev.set_pwm_configuration(1, self.frequency, 0)
+            self.dev.set_pwm_configuration(2, self.frequency, 0)
+            self.dev.set_pwm_configuration(3, self.frequency, 0)
 
         def set_outputs(self):
             self.dev.set_value(self.values)
@@ -283,26 +291,14 @@ class TFH:
             output_channel = control_rule.get("output_channel")
             output_device_uid = control_rule.get("output_device")
 
+            if self.operation_mode == 1 or input_device_uid is None or control_rule.get("type") == "easy_PI":
+                continue
             if not self.inputs[input_device_uid].operational:
                 self.__run_failsafe_control()
                 continue
 
-            gradient = control_rule.get("gradient")
-            x = control_rule.get("x")
-            y = control_rule.get("y")
-
-            # @TODO: needs to be neater
-            for element in [gradient, x, y]:
-                if element is None:
-                    print("missing control config")
-                    exit()
-
             input_val = self.inputs[input_device_uid].values[input_channel]
-            converted_value = (input_val - y) * gradient
-            print(f"{control_name}: in - {input_val} - {converted_value}")
-
-            soll_input = 0
-            self.outputs[output_device_uid].values[output_channel] = input_val
+            
 
             # a 0 value is technically False but ... not a sensible value either
             permissible_deviation = control_rule.get("permissible_deviation", False)
@@ -385,34 +381,75 @@ class TFH:
         for device_key, value in self.config.items():
             print(f"checking devices for {device_key}")
 
-            # @TODO: tie this into the control_presets
-            if not all(key in value for key in ("input_device", "input_channel", "output_device", "output_channel")):
-                print(f"invalid config for device {device_key} due to missing parameter")
-                exit()
+            if value["type"] in ["ExtOutput", "valve", "easy_PI"]:
+                if not all(key in value for key in ("output_device", "output_channel")):
+                    print(f"invalid config for device {device_key} due to missing parameter")
+                    exit()
 
-            self.controls[device_key] = self.Control()
-            input_uid = value.get("input_device")
-            output_uid = value.get("output_device")
-            used_input_channels = channels_required.get(input_uid, [])
-            used_output_channels = channels_required.get(output_uid, [])
-            req_input_chann = value.get("input_channel")
-            req_output_chann = value.get("input_channel")
-            if req_input_chann in used_input_channels or req_output_chann in used_output_channels:
-                print(f"invalid config: {device_key} has overlapping channels with previous configured devices")
-                exit()
-            used_output_channels.append(req_output_chann)
-            used_input_channels.append(req_input_chann)
-            channels_required[input_uid] = used_input_channels
-            channels_required[output_uid] = used_output_channels
+                self.controls[device_key] = self.Control()
+                output_uid = value.get("output_device")
+                used_output_channels = channels_required.get(output_uid, [])
+                req_output_chann = value.get("output_channel")
+                if  req_output_chann in used_output_channels:
+                    print(req_output_chann)
+                    print(used_output_channels)
+                    print(f"invalid config: {device_key} has overlapping channels with previous configured devices")
+                    exit()
+                used_output_channels.append(req_output_chann)
+                channels_required[output_uid] = used_output_channels
+                print("VALID config!")
+                self.devices_required.add(output_uid)
 
-            print("VALID config!")
-            self.devices_required.add(input_uid)
-            self.devices_required.add(output_uid)
+
+            elif value["type"] in ["ExtInput", "pressure", "thermocouple"]:
+                if not all(key in value for key in ("input_device", "input_channel")):
+                    print(f"invalid config for device {device_key} due to missing parameter")
+                    exit()
+
+                self.controls[device_key] = self.Control()
+                input_uid = value.get("input_device")
+                used_input_channels = channels_required.get(input_uid, [])
+                req_input_chann = value.get("input_channel")
+                if req_input_chann in used_input_channels :
+                    print(f"invalid config: {device_key} has overlapping channels with previous configured devices")
+                    exit()
+                used_input_channels.append(req_input_chann)
+                channels_required[input_uid] = used_input_channels
+
+                print("VALID config!")
+                self.devices_required.add(input_uid)
+
+
+
+            else:    
+                # @TODO: tie this into the control_presets
+                if not all(key in value for key in ("input_device", "input_channel", "output_device", "output_channel")):
+                    print(f"invalid config for device {device_key} due to missing parameter")
+                    exit()
+
+                self.controls[device_key] = self.Control()
+                input_uid = value.get("input_device")
+                output_uid = value.get("output_device")
+                used_input_channels = channels_required.get(input_uid, [])
+                used_output_channels = channels_required.get(output_uid, [])
+                req_input_chann = value.get("input_channel")
+                req_output_chann = value.get("output_channel")
+                if req_input_chann in used_input_channels or req_output_chann in used_output_channels:
+                    print(f"invalid config: {device_key} has overlapping channels with previous configured devices")
+                    exit()
+                used_output_channels.append(req_output_chann)
+                used_input_channels.append(req_input_chann)
+                channels_required[input_uid] = used_input_channels
+                channels_required[output_uid] = used_output_channels
+
+                print("VALID config!")
+                self.devices_required.add(input_uid)
+                self.devices_required.add(output_uid)
 
         self.setup_devices()
 
         for uid in self.devices_required:
-            if uid not in self.devices_present:
+            if uid not in self.devices_present and self.operation_mode == 0:
                 raise ModuleNotFoundError(f"Missing Tinkerforge Element: {uid}")
         print("\nvalid setup for configured initialisation detected \n")
 
@@ -445,6 +482,8 @@ class TFH:
         device_entry = self.devices_present.get(uid)
         if device_entry is None:
             print(f"Setup of not present device requested {uid}")
+            if ( self.operation_mode) == 1: #debug Mode
+                print(f"Setup device  {uid} as dummy")                
             return
 
         device_identifier = device_entry.get("device_identifier")
