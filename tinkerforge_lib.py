@@ -143,11 +143,15 @@ class TFH:
     class ThermoCouple(InputDevice):
         device_type = 2109
         
-        def __init__(self, uid, conn, typ ='N'):
+        def __init__(self, uid, conn, typ='N'):
             super().__init__(uid, 1)
             self.dev = BrickletThermocoupleV2(uid, conn)        
             type_dict = {'B': 0, 'E': 1, 'J': 2, 'K': 3, 'N': 4, 'R': 5, 'S': 6, 'T': 7}
-            thermocouple_type = type_dict[typ]
+            try:
+                thermocouple_type = type_dict[typ.upper()]
+            except KeyError:
+                print(f"invalid thermocouple config for {uid}, type not found {typ}")
+                exit()
             self.dev.set_configuration(16, thermocouple_type, 0)
             self.dev.register_callback(self.dev.CALLBACK_TEMPERATURE, self.collect_temperature)
             self.dev.set_temperature_callback_configuration(100, False, "x", 0, 0)
@@ -390,7 +394,7 @@ class TFH:
                 output_uid = value.get("output_device")
                 used_output_channels = channels_required.get(output_uid, [])
                 req_output_chann = value.get("output_channel")
-                if  req_output_chann in used_output_channels:
+                if req_output_chann in used_output_channels:
                     print(req_output_chann)
                     print(used_output_channels)
                     print(f"invalid config: {device_key} has overlapping channels with previous configured devices")
