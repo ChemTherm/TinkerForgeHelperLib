@@ -374,7 +374,7 @@ class TFH:
         self.conn.enumerate()
         sleep(0.2)
 
-        if not len(self.devices_present):
+        if not len(self.devices_present) and self.operation_mode != self.OperationModes.dummyMode:
             raise ConnectionError("No Tinkerforge module found, check connection to master brick")
 
         channels_required = {}
