@@ -146,7 +146,7 @@ class TFH:
         def __init__(self, uid, conn, typ ='N'):
             super().__init__(uid, 1)
             self.dev = BrickletThermocoupleV2(uid, conn)        
-            type_dict = {'B' : 0, 'E' : 1, 'J' : 2, 'K' : 3, 'N' : 4, 'R' : 5, 'S' : 6, 'T' : 7}
+            type_dict = {'B': 0, 'E': 1, 'J': 2, 'K': 3, 'N': 4, 'R': 5, 'S': 6, 'T': 7}
             thermocouple_type = type_dict[typ]
             self.dev.set_configuration(16, thermocouple_type, 0)
             self.dev.register_callback(self.dev.CALLBACK_TEMPERATURE, self.collect_temperature)
@@ -400,7 +400,6 @@ class TFH:
                 print("VALID config!")
                 self.devices_required.add(output_uid)
 
-
             elif value["type"] in ["ExtInput", "pressure", "thermocouple"]:
                 if not all(key in value for key in ("input_device", "input_channel")):
                     print(f"invalid config for device {device_key} due to missing parameter")
@@ -418,8 +417,6 @@ class TFH:
 
                 print("VALID config!")
                 self.devices_required.add(input_uid)
-
-
 
             else:    
                 # @TODO: tie this into the control_presets
@@ -482,7 +479,7 @@ class TFH:
         device_entry = self.devices_present.get(uid)
         if device_entry is None:
             print(f"Setup of not present device requested {uid}")
-            if ( self.operation_mode) == 1: #debug Mode
+            if self.operation_mode == self.OperationModes.dummyMode:
                 print(f"Setup device  {uid} as dummy")                
             return
 
