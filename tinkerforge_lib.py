@@ -114,7 +114,7 @@ class TFH:
     class IndustrialDualAnalogInV2(InputDevice):
         device_type = 2121
 
-        def __init__(self, uid, conn):
+        def __init__(self, uid, conn, args):
             super().__init__(uid, 2)
             self.dev = BrickletIndustrialDualAnalogInV2(uid, conn)
             self.dev.register_callback(self.dev.CALLBACK_ALL_VOLTAGES, self.collect_all)
@@ -123,7 +123,7 @@ class TFH:
     class IndustrialDual020mAV2(InputDevice):
         device_type = 2120
 
-        def __init__(self, uid, conn):
+        def __init__(self, uid, conn, args):
             self.current_channel = 0
             super().__init__(uid, 2)
             self.dev = BrickletIndustrialDual020mAV2(uid, conn)
@@ -134,7 +134,7 @@ class TFH:
         def collect_single_current(self, channel, value):
             self.values[channel] = value
             self.reset_activity()
-            #print(f"reading input on device {self.uid} - {channel} {value}")
+            # print(f"reading input on device {self.uid} - {channel} {value}")
             if channel < self.input_cnt:
                 self.current_channel += 1
             else:
@@ -191,7 +191,7 @@ class TFH:
     class DualRelay(OutputDevice):
         device_type = 284
 
-        def __init__(self, uid, conn):
+        def __init__(self, uid, conn, args):
             super().__init__(uid, 2)
             self.values = [False] * 2
             self.dev = BrickletIndustrialDualRelay(uid, conn)
@@ -202,7 +202,7 @@ class TFH:
     class IndustrialAnalogOutV2(OutputDevice):
         device_type = 2116
 
-        def __init__(self, uid, conn):
+        def __init__(self, uid, conn, args):
             super().__init__(uid, 2)
             self.dev = BrickletIndustrialAnalogOutV2(uid, conn)
             self.dev.set_voltage(0)
@@ -212,8 +212,9 @@ class TFH:
     class IndustrialDigitalOut4(OutputDevice):
         device_type = 2124
 
-        def __init__(self, uid, conn):
+        def __init__(self, uid, conn, args):
             super().__init__(uid, 4)
+            self.values = [False] * 4
             self.dev = BrickletIndustrialDigitalOut4V2(uid, conn)
             self.frequency = 10
             self.dev.set_pwm_configuration(0, self.frequency, 0)
@@ -228,7 +229,7 @@ class TFH:
         # @todo TBD: running with callback instead
         device_type = 19
 
-        def __init__(self, uid, conn):
+        def __init__(self, uid, conn, args):
             super().__init__(uid, 1)
             self.dev = BrickSilentStepper(uid, conn)
             self.dev.enable()
@@ -479,7 +480,7 @@ class TFH:
             if uid in self.devices_required:
                 self.setup_device(uid)
 
-    def setup_device(self, uid):
+    def setup_device(self, uid, args=()):
         device_entry = self.devices_present.get(uid)
         if device_entry is None:
             print(f"Setup of not present device requested {uid}")
@@ -497,11 +498,11 @@ class TFH:
         print(f"device_identifier {device_identifier}")
         cls = self.get_io_cls(TFH.InputDevice, device_identifier)
         if cls is not None:
-            dev = self.inputs[uid] = cls(uid, self.conn)
+            dev = self.inputs[uid] = cls(uid, self.conn, args)
         else:
             cls = self.get_io_cls(TFH.OutputDevice, device_identifier)
             if cls is not None:
-                dev = self.outputs[uid] = cls(uid, self.conn)
+                dev = self.outputs[uid] = cls(uid, self.conn, args)
             else:
                 print(f"{uid} failed to setup device due to unknown device type {device_identifier}")
                 exit()
