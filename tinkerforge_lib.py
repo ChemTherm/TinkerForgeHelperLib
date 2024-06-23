@@ -23,6 +23,7 @@ from tinkerforge.ip_connection import IPConnection
 from tinkerforge.ip_connection import Error as IPConnError
 from threading import Thread
 import inspect
+import itertools
 
 '''
 @ TODO: 🔲 ✅
@@ -89,6 +90,11 @@ class TFH:
     class Control:
         def __init__(self):
             self.last_deviation = False
+
+    class DummyDevice:
+        def __init__(self, uid, channel_cnt=4):
+            self.uid = uid
+            self.values = [0] * channel_cnt
 
     # @Todo: may as well smash input and output device into one class
     class InputDevice:
@@ -243,7 +249,8 @@ class TFH:
         self.conn.register_callback(IPConnection.CALLBACK_ENUMERATE, self.cb_enumerate)
 
         self.devices_present = {}
-        self.devices_required = set()
+        self.input_devices_required = set()
+        self.output_devices_required = set()
         self.operation_mode = debug_mode
         self.config = get_config(config_name)
         self.inputs = {}
@@ -329,6 +336,8 @@ class TFH:
         now = dt.now()
 
         for uid, input_dev in self.inputs.items():
+            if isinstance(input_dev, self.DummyDevice):
+                continue
             input_dev.operational = True
             delta = now - input_dev.activity_timestamp
             if delta > input_dev.timeout:
@@ -343,7 +352,10 @@ class TFH:
         """
         # @ TODO implement failsafe modes somewhere maybe here?
         for uid, output_dev in self.outputs.items():
-            # @Todo: this only works for this specific device
+
+            if isinstance(output_dev, self.DummyDevice):
+                continue
+
             try:
                 _ = output_dev.dev.get_enabled()
             except AttributeError as _:
@@ -403,7 +415,7 @@ class TFH:
                 used_output_channels.append(req_output_chann)
                 channels_required[output_uid] = used_output_channels
                 print("VALID config!")
-                self.devices_required.add(output_uid)
+                self.output_devices_required.add(output_uid)
 
             elif value["type"] in ["ExtInput", "pressure", "thermocouple"]:
                 if not all(key in value for key in ("input_device", "input_channel")):
@@ -421,7 +433,7 @@ class TFH:
                 channels_required[input_uid] = used_input_channels
 
                 print("VALID config!")
-                self.devices_required.add(input_uid)
+                self.input_devices_required.add(input_uid)
 
             else:    
                 # @TODO: tie this into the control_presets
@@ -445,12 +457,12 @@ class TFH:
                 channels_required[output_uid] = used_output_channels
 
                 print("VALID config!")
-                self.devices_required.add(input_uid)
-                self.devices_required.add(output_uid)
+                self.input_devices_required.add(input_uid)
+                self.output_devices_required.add(output_uid)
 
         self.setup_devices()
 
-        for uid in self.devices_required:
+        for uid in itertools.chain(self.input_devices_required, self.output_devices_required):
             if uid not in self.devices_present and self.operation_mode == 0:
                 raise ModuleNotFoundError(f"Missing Tinkerforge Element: {uid}")
         print("\nvalid setup for configured initialisation detected \n")
@@ -477,7 +489,7 @@ class TFH:
         else:
             print(f"reconnect detected from device: {uid} - "
                   f"{device_identifier_types.get(device_identifier, 'unknown device type')}")
-            if uid in self.devices_required:
+            if uid in itertools.chain(self.input_devices_required, self.output_devices_required):
                 self.setup_device(uid)
 
     def setup_device(self, uid, args=()):
@@ -485,7 +497,11 @@ class TFH:
         if device_entry is None:
             print(f"Setup of not present device requested {uid}")
             if self.operation_mode == self.OperationModes.dummyMode:
-                print(f"Setup device  {uid} as dummy")                
+                print(f"Setup device  {uid} as dummy")
+                if uid in self.output_devices_required:
+                    self.outputs[uid] = self.DummyDevice(uid)
+                else:
+                    self.inputs[uid] = self.DummyDevice(uid)
             return
 
         device_identifier = device_entry.get("device_identifier")
@@ -515,6 +531,6 @@ class TFH:
 
     def setup_devices(self):
         print()
-        for key in self.devices_required:
+        for key in itertools.chain(self.input_devices_required, self.output_devices_required):
             self.setup_device(key)
         print()
