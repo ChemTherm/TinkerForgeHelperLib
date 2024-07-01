@@ -31,12 +31,7 @@ import itertools
  🔲 check the super init bevhiour in regards to setting a value after before super
  ✅ master brick reconnect handling 
  ✅make a listing of linked devices in case of connection loss for failsafes?
-
-disconnects: the disconnects of the master brick gets detected the others fails siltently 
-
- what to do when an output fails?
- @TODO check json failure handling
- 
+ 🔲 making Inputdevice and Outputdevice based on a baseclass 
 '''
 
 # @todo Integrate this more neatly
@@ -77,7 +72,6 @@ class TFH:
         normalMode = 0
         dummyMode = 1
 
-    # where to use those / apply to what? IO? controls?
     class WarningLevels(IntEnum):
         normal = 0
         failOperational = 1
@@ -97,7 +91,6 @@ class TFH:
             self.uid = uid
             self.values = [0] * channel_cnt
 
-    # @Todo: may as well smash input and output device into one class
     class InputDevice:
         def __init__(self, uid, input_cnt, timeout=default_timeout):
             self.uid = uid
@@ -167,7 +160,7 @@ class TFH:
             self.values[0] = temperature/100
             self.reset_activity()
 
-    # @TODO: complete this
+    # @TODO: split PWM and Boolean handling
     class IndustrialDigitalIn4(InputDevice):
         device_type = 2100
 
@@ -232,8 +225,8 @@ class TFH:
         def set_outputs(self):
             self.dev.set_value(self.values)
 
+    # @TODD: WIP
     class SilentStepper(OutputDevice):
-        # @todo TBD: running with callback instead
         device_type = 19
 
         def __init__(self, uid, conn, args):
@@ -347,10 +340,6 @@ class TFH:
                 print(f"timeout detected from uid {uid} {input_dev.activity_timestamp}")
 
     def __manage_outputs(self):
-        """
-        A simple function that just sets the given value, the rules and value are handled by Control classes
-        """
-        # @ TODO implement failsafe modes somewhere maybe here?
         for uid, output_dev in self.outputs.items():
 
             if isinstance(output_dev, self.DummyDevice):
@@ -365,7 +354,6 @@ class TFH:
                 print(f"connection to output {uid} - "
                       f"{device_identifier_types.get(output_dev.device_type, 'unknown device type')} has been lost "
                       f"{exp}")
-            # @TODO: this will require device specific fncs
             try:
                 output_dev.set_outputs()
                 continue
@@ -375,7 +363,6 @@ class TFH:
             try:
                 output_dev.dev.set_voltage(output_dev.values[0])
                 # @TODO there needs to be a check on the channels and device specific fncs/class or whatever
-                # output_dev.obj.set_voltage(output_dev.val[1])
             except Exception as exp:
                 print(exp)
 
