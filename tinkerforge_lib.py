@@ -34,18 +34,6 @@ import itertools
  🔲 making Inputdevice and Outputdevice based on a baseclass 
 '''
 
-# @todo Integrate this more neatly
-device_identifier_types = {
-    13: "Master Brick",
-    19: "Silent Stepper",
-    284: "Industrial Dual Relay",
-    2100: "Industrial Digital In 4 Bricklet 2.0",
-    2109: "Thermocouple",
-    2120: "Industrial Dual 0-20mA 2.0",
-    2124: "Industrial Digital Out 4 Bricklet 2.0",
-    2121: "Industrial Dual Analog In Bricklet 2.0",
-    2116: "Industrial Analog Out Bricklet 2.0",
-}
 default_timeout = timedelta(milliseconds=1000)
 
 
@@ -100,7 +88,6 @@ class TFH:
             self.operational = True
             self.timeout = timeout
             self.ioType = 0
-
         def reset_activity(self):
             self.activity_timestamp = dt.now()
 
@@ -256,6 +243,15 @@ class TFH:
         self.main_loop = Thread(target=self.__loop)
         self.main_loop.start()
 
+    def get_brick_name(self, type_no):
+        if type_no == 13:
+            return "Master Brick"
+        for name, obj in inspect.getmembers(self):
+            if hasattr(obj, "__bases__") and any(_ in obj.__bases__ for _ in [self.InputDevice, self.OutputDevice]):
+                if type_no == obj.device_type:
+                    return name
+        return "Unknown"
+
     def get_io_cls(self, parent_cls, device_identifier):
         """
         returns the child cls of a given device identifier, if none matches it returns None
@@ -352,7 +348,7 @@ class TFH:
                 pass
             except IPConnError as exp:
                 print(f"connection to output {uid} - "
-                      f"{device_identifier_types.get(output_dev.device_type, 'unknown device type')} has been lost "
+                      f"{type(output_dev).__name__} has been lost "
                       f"{exp}")
             try:
                 output_dev.set_outputs()
@@ -429,9 +425,16 @@ class TFH:
                      device_identifier, enumeration_type):
 
         if enumeration_type == IPConnection.ENUMERATION_TYPE_DISCONNECTED:
-            # @Todo: device identifier is already known, catch it from devices_present
-            print(f"Disconnect detected from device: {uid} - "
-                  f"{device_identifier_name}")
+            # in case of a master disconnect the device_type is listed as 0 for all lost devices
+            try:
+                dev = self.devices_present[uid]
+                if dev.get("parent_uid", 0) == 0:
+                    print(f"Disconnect detected from Master Brick: {uid} - along with following devices")
+                else:
+                    print(f"Disconnect detected from device: {uid} - "
+                         f"{self.get_brick_name(dev.get('device_identifier', 0))}")
+            except KeyError:
+                pass
             return
 
         if uid not in self.devices_present.keys():
@@ -441,12 +444,11 @@ class TFH:
             # print("Position:          " + _)
             print("Hardware Version:  " + str(hardware_version))
             print("Firmware Version:  " + str(firmware_version))
-            print("Device Identifier: " + str(device_identifier))
-            print(device_identifier_types.get(device_identifier, "unknown"))
+            print("Device Identifier: " + str(device_identifier) + f" - {self.get_brick_name(device_identifier)}")
             print("")
         else:
             print(f"reconnect detected from device: {uid} - "
-                  f"{device_identifier_types.get(device_identifier, 'unknown device type')}")
+                  f"{self.get_brick_name(device_identifier)}")
             if uid in itertools.chain(self.input_devices_required, self.output_devices_required):
                 self.setup_device(uid)
 
@@ -469,7 +471,6 @@ class TFH:
         except (KeyError, AttributeError):
             old_values = False
 
-        print(f"device_identifier {device_identifier}")
         cls = self.get_io_cls(TFH.InputDevice, device_identifier)
         if cls is not None:
             dev = self.inputs[uid] = cls(uid, self.conn, args)
@@ -485,7 +486,7 @@ class TFH:
             dev.values = old_values
             
         print(f"successfully setup device {uid} - "
-              f"{device_identifier_types.get(device_identifier, 'unknown device type')}")
+              f"{type(dev).__name__}")
 
     def setup_devices(self):
         print()
