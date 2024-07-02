@@ -1,10 +1,14 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+
 import logging
 from datetime import datetime as dt
 from datetime import timedelta
 from enum import IntEnum
+import json
+from time import sleep
 
+from tinkerforge.brick_silent_stepper import BrickSilentStepper
 from tinkerforge.bricklet_thermocouple_v2 import BrickletThermocoupleV2
 from tinkerforge.bricklet_industrial_digital_out_4_v2 import BrickletIndustrialDigitalOut4V2
 from tinkerforge.bricklet_industrial_analog_out_v2 import BrickletIndustrialAnalogOutV2
@@ -13,46 +17,23 @@ from tinkerforge.bricklet_analog_out_v3 import BrickletAnalogOutV3
 from tinkerforge.bricklet_industrial_dual_analog_in_v2 import BrickletIndustrialDualAnalogInV2
 from tinkerforge.bricklet_industrial_dual_0_20ma_v2 import BrickletIndustrialDual020mAV2
 from tinkerforge.bricklet_industrial_dual_relay import BrickletIndustrialDualRelay
-
-import json
-
-from time import sleep
-
-# unused imports just keeping them around for now
-
-# from tinkerforge.bricklet_industrial_dual_relay import BrickletIndustrialDualRelay
+from tinkerforge.bricklet_industrial_digital_in_4_v2 import BrickletIndustrialDigitalIn4V2
 
 from tinkerforge.ip_connection import IPConnection
 from tinkerforge.ip_connection import Error as IPConnError
 from threading import Thread
+from control_types import Controls
+import inspect
+import itertools
 
 '''
 @ TODO: 🔲 ✅
  🔲 check the super init bevhiour in regards to setting a value after before super
  ✅ master brick reconnect handling 
- 🔲 reinstate something state for more indepth for failure mode
- 🔲 rework manageoutputs? the dual relay may need to work differently or get a fnc to set the outputs
  ✅make a listing of linked devices in case of connection loss for failsafes?
-
-disconnects: the disconnects of the master brick gets detected the others fails siltently 
-
- what to do when an output fails?
- @TODO check json failure handling
- 
+ 🔲 making Inputdevice and Outputdevice based on a baseclass 
 '''
 
-# @todo Integrate this more neatly
-device_identifier_types = {
-    13: "Master Brick",
-    19: "Silent Stepper",
-    284: "Industrial Dual Relay",
-    2100: "Industrial Digital In 4 Bricklet 2.0",
-    2109: "Thermocouple",
-    2120: "Industrial Dual 0-20mA 2.0",
-    2124: "Industrial Digital Out 4 Bricklet 2.0",
-    2121: "Industrial Dual Analog In Bricklet 2.0",
-    2116: "Industrial Analog Out Bricklet 2.0",
-}
 default_timeout = timedelta(milliseconds=1000)
 
 
@@ -68,7 +49,7 @@ def get_config(config_name):
         exit()
     else:
         try:
-            import testing.json_files.config as cfg
+            import src.config as cfg
             return cfg.config
         except ModuleNotFoundError:
             exit("no backup python config present, exiting")
@@ -79,7 +60,6 @@ class TFH:
         normalMode = 0
         dummyMode = 1
 
-    # where to use those / apply to what? IO? controls?
     class WarningLevels(IntEnum):
         normal = 0
         failOperational = 1
@@ -94,7 +74,11 @@ class TFH:
         def __init__(self):
             self.last_deviation = False
 
-    # @Todo: may as well smash input and output device into one class
+    class DummyDevice:
+        def __init__(self, uid, channel_cnt=4):
+            self.uid = uid
+            self.values = [0] * channel_cnt
+
     class InputDevice:
         def __init__(self, uid, input_cnt, timeout=default_timeout):
             self.uid = uid
@@ -104,18 +88,20 @@ class TFH:
             self.operational = True
             self.timeout = timeout
             self.ioType = 0
+        def reset_activity(self):
+            self.activity_timestamp = dt.now()
 
         def collect_all(self, _args):
             for i, value in enumerate(_args):
                 # print(f"reading input on device {self.uid} - {i} {value}")
                 self.values[i] = value
             # @Todo: is there a less costly check?
-            self.activity_timestamp = dt.now()
+            self.reset_activity()
 
     class IndustrialDualAnalogInV2(InputDevice):
         device_type = 2121
 
-        def __init__(self, uid, conn):
+        def __init__(self, uid, conn, args):
             super().__init__(uid, 2)
             self.dev = BrickletIndustrialDualAnalogInV2(uid, conn)
             self.dev.register_callback(self.dev.CALLBACK_ALL_VOLTAGES, self.collect_all)
@@ -124,7 +110,7 @@ class TFH:
     class IndustrialDual020mAV2(InputDevice):
         device_type = 2120
 
-        def __init__(self, uid, conn):
+        def __init__(self, uid, conn, args):
             self.current_channel = 0
             super().__init__(uid, 2)
             self.dev = BrickletIndustrialDual020mAV2(uid, conn)
@@ -134,12 +120,52 @@ class TFH:
 
         def collect_single_current(self, channel, value):
             self.values[channel] = value
-            self.activity_timestamp = dt.now()
-            print(f"reading input on device {self.uid} - {channel} {value}")
+            self.reset_activity()
+            # print(f"reading input on device {self.uid} - {channel} {value}")
             if channel < self.input_cnt:
                 self.current_channel += 1
             else:
                 self.current_channel = 0
+
+    class ThermoCouple(InputDevice):
+        device_type = 2109
+        
+        def __init__(self, uid, conn, typ='N'):
+            super().__init__(uid, 1)
+            self.dev = BrickletThermocoupleV2(uid, conn)        
+            type_dict = {'B': 0, 'E': 1, 'J': 2, 'K': 3, 'N': 4, 'R': 5, 'S': 6, 'T': 7}
+            try:
+                thermocouple_type = type_dict[typ.upper()]
+            except KeyError:
+                print(f"invalid thermocouple config for {uid}, type not found {typ}")
+                exit()
+            self.dev.set_configuration(16, thermocouple_type, 0)
+            self.dev.register_callback(self.dev.CALLBACK_TEMPERATURE, self.collect_temperature)
+            self.dev.set_temperature_callback_configuration(100, False, "x", 0, 0)
+
+        def collect_temperature(self, temperature):
+            self.values[0] = temperature/100
+            self.reset_activity()
+
+    # @TODO: split PWM and Boolean handling
+    class IndustrialDigitalIn4(InputDevice):
+        device_type = 2100
+
+        def cb_value(self, channel, changed, value):
+            self.values[channel] = value
+            self.reset_activity()
+        
+        def __init__(self, uid, conn):
+            super().__init__(uid, 4)
+            self.dev = BrickletIndustrialDigitalIn4V2(uid, conn)
+            self.dev.register_callback(self.dev.CALLBACK_VALUE, self.cb_value)
+            self.dev.set_value_callback_configuration(0, 100, False)
+            self.dev.set_value_callback_configuration(1, 100, False)
+            self.dev.set_value_callback_configuration(2, 100, False)
+            self.dev.set_value_callback_configuration(3, 100, False)
+            # TODO: consider configurations
+            # Configureing rising edge count (channel 3) with 10ms debounce
+            # self.dev.set_edge_count_configuration(3, 0, 10)
 
     class OutputDevice:
         def __init__(self, uid, output_cnt):
@@ -152,39 +178,89 @@ class TFH:
     class DualRelay(OutputDevice):
         device_type = 284
 
-        def __init__(self, uid, conn):
-            self.uid = uid
+        def __init__(self, uid, conn, args):
             super().__init__(uid, 2)
+            self.values = [False] * 2
             self.dev = BrickletIndustrialDualRelay(uid, conn)
+
+        def set_outputs(self):
+            self.dev.set_value(*self.values)
 
     class IndustrialAnalogOutV2(OutputDevice):
         device_type = 2116
 
-        def __init__(self, uid, conn):
-            self.uid = uid
+        def __init__(self, uid, conn, args):
             super().__init__(uid, 2)
             self.dev = BrickletIndustrialAnalogOutV2(uid, conn)
             self.dev.set_voltage(0)
             self.dev.set_enabled(True)
             self.dev.set_out_led_status_config(0, 5000, 1)
 
+    class IndustrialDigitalOut4(OutputDevice):
+        device_type = 2124
+
+        def __init__(self, uid, conn, args):
+            super().__init__(uid, 4)
+            self.values = [False] * 4
+            self.dev = BrickletIndustrialDigitalOut4V2(uid, conn)
+            self.frequency = 10
+            self.dev.set_pwm_configuration(0, self.frequency, 0)
+            self.dev.set_pwm_configuration(1, self.frequency, 0)
+            self.dev.set_pwm_configuration(2, self.frequency, 0)
+            self.dev.set_pwm_configuration(3, self.frequency, 0)
+
+        def set_outputs(self):
+            self.dev.set_value(self.values)
+
+    # @TODD: WIP
+    class SilentStepper(OutputDevice):
+        device_type = 19
+
+        def __init__(self, uid, conn, args):
+            super().__init__(uid, 1)
+            self.dev = BrickSilentStepper(uid, conn)
+            self.dev.enable()
+
+        def stop(self):
+            self.dev.stop()
+
     def __init__(self, ip, port, config_name=False, debug_mode=OperationModes.normalMode):
         self.conn = IPConnection()
         self.conn.connect(ip, port)
         self.conn.register_callback(IPConnection.CALLBACK_ENUMERATE, self.cb_enumerate)
-        # may be renamed or localized, keeping it for now
+
         self.devices_present = {}
-        self.devices_required = set()
+        self.input_devices_required = set()
+        self.output_devices_required = set()
         self.operation_mode = debug_mode
         self.config = get_config(config_name)
         self.inputs = {}
         self.outputs = {}
         self.controls = {}
         self.verify_config_devices()
+
         self.run = True
         self.main_loop = Thread(target=self.__loop)
         self.main_loop.start()
-        # @Todo create flags for this with different fail safe and operational mode
+
+    def get_brick_name(self, type_no):
+        if type_no == 13:
+            return "Master Brick"
+        for name, obj in inspect.getmembers(self):
+            if hasattr(obj, "__bases__") and any(_ in obj.__bases__ for _ in [self.InputDevice, self.OutputDevice]):
+                if type_no == obj.device_type:
+                    return name
+        return "Unknown"
+
+    def get_io_cls(self, parent_cls, device_identifier):
+        """
+        returns the child cls of a given device identifier, if none matches it returns None
+        """
+        for name, obj in inspect.getmembers(self):
+            if hasattr(obj, "__bases__") and parent_cls in obj.__bases__:
+                if obj.device_type == device_identifier:
+                    return obj
+        return None
 
     def cleanup(self):
         self.run = False
@@ -192,6 +268,10 @@ class TFH:
         for uid, output_dev in self.outputs.items():
             for index in range(output_dev.output_cnt):
                 output_dev.values[index] = 0
+            try:
+                output_dev.stop()
+            except AttributeError:
+                pass
         self.__manage_outputs()
 
     def __loop(self):
@@ -213,32 +293,19 @@ class TFH:
             output_channel = control_rule.get("output_channel")
             output_device_uid = control_rule.get("output_device")
 
+            if self.operation_mode == 1 or input_device_uid is None or control_rule.get("type") == "easy_PI":
+                continue
             if not self.inputs[input_device_uid].operational:
                 self.__run_failsafe_control()
                 continue
 
-            gradient = control_rule.get("gradient")
-            x = control_rule.get("x")
-            y = control_rule.get("y")
-
-            # @TODO: needs to be neater
-            for element in [gradient, x, y]:
-                if element is None:
-                    print("missing control config")
-                    exit()
-
             input_val = self.inputs[input_device_uid].values[input_channel]
-            converted_value = (input_val - y) * gradient
-            print(f"{control_name}: in - {input_val} - {converted_value}")
-
-            soll_input = 0
-            self.outputs[output_device_uid].values[output_channel] = input_val
 
             # a 0 value is technically False but ... not a sensible value either
-            permissable_deviation = control_rule.get("permissible_deviation", False)
-            if permissable_deviation:
+            permissible_deviation = control_rule.get("permissible_deviation", False)
+            if permissible_deviation:
                 delta = abs(input_val - self.outputs[output_device_uid].values[output_channel])
-                if delta > permissable_deviation * soll_input:
+                if delta > permissible_deviation * soll_input:
                     last_deviation = self.controls[control_name].get("last_deviation")
 
                     if last_deviation and last_deviation - dt.now() > timedelta(seconds=30):
@@ -258,6 +325,8 @@ class TFH:
         now = dt.now()
 
         for uid, input_dev in self.inputs.items():
+            if isinstance(input_dev, self.DummyDevice):
+                continue
             input_dev.operational = True
             delta = now - input_dev.activity_timestamp
             if delta > input_dev.timeout:
@@ -267,86 +336,105 @@ class TFH:
                 print(f"timeout detected from uid {uid} {input_dev.activity_timestamp}")
 
     def __manage_outputs(self):
-        """
-        A simple function that just sets the given value, the rules and value are handled by Control classes
-        """
-        # @ TODO implement failsafe modes somewhere maybe here?
         for uid, output_dev in self.outputs.items():
-            # @Todo: this only works for this specific device
+
+            if isinstance(output_dev, self.DummyDevice):
+                continue
+
             try:
                 _ = output_dev.dev.get_enabled()
+            except AttributeError as _:
+                # some devices like BrickletIndustrialDualRelay do not support this method
+                pass
             except IPConnError as exp:
                 print(f"connection to output {uid} - "
-                      f"{device_identifier_types.get(output_dev.device_type, 'unknown device type')} has been lost "
+                      f"{type(output_dev).__name__} has been lost "
                       f"{exp}")
+            try:
+                output_dev.set_outputs()
+                continue
+            except AttributeError:
+                pass
+
             try:
                 output_dev.dev.set_voltage(output_dev.values[0])
                 # @TODO there needs to be a check on the channels and device specific fncs/class or whatever
-                # output_dev.obj.set_voltage(output_dev.val[1])
             except Exception as exp:
                 print(exp)
 
     def verify_config_devices(self):
-        print("listing devices present: \n")
-        # @todo define required and optional device from parsing
         """
         collects the UIDs of the connected device and checks against the listing of UIDs given from the config
         If not every required device is given an Error is given
         """
+
+        print("listing devices present: \n")
+        # @todo define required and optional device from parsing
+
         self.conn.enumerate()
         sleep(0.2)
-        # self.conn.disconnect()
 
-        # found no obvious way to check the main connection lets throw an error when no devices are found
-        if not len(self.devices_present):
+        if not len(self.devices_present) and self.operation_mode != self.OperationModes.dummyMode:
             raise ConnectionError("No Tinkerforge module found, check connection to master brick")
 
         channels_required = {}
         for device_key, value in self.config.items():
-            print(device_key)
-            # @TODO: this will become device specific at some point
-            if not all(key in value for key in ("input_device", "input_channel", "output_device", "output_channel")):
-                print(f"invalid config for device {device_key} due to missing parameter")
-                exit()
+
+            print(f"checking devices for {device_key}")
+            type_requirements = Controls.types.get("type", Controls.Entries.hasOutputs + Controls.Entries.hasInputs)
+
+            if type_requirements ^ Controls.Entries.hasOutputs:
+                if not all(key in value for key in ("output_device", "output_channel")):
+                    print(f"invalid config for device {device_key} due to missing output parameter")
+                    exit()
+                output_uid = value.get("output_device")
+                used_output_channels = channels_required.get(output_uid, [])
+                req_output_chann = value.get("output_channel")
+                if req_output_chann in used_output_channels:
+                    print(f"invalid config: {device_key} has overlapping channels with previous configured devices")
+                    exit()
+                used_output_channels.append(req_output_chann)
+                channels_required[output_uid] = used_output_channels
+                self.output_devices_required.add(output_uid)
+
+            if type_requirements ^ Controls.Entries.hasInputs:
+                if not all(key in value for key in ("output_device", "output_channel")):
+                    print(f"invalid config for device {device_key} due to missing input parameter")
+                    exit()
+                input_uid = value.get("input_device")
+                used_input_channels = channels_required.get(input_uid, [])
+                req_input_chann = value.get("input_channel")
+                if req_input_chann in used_input_channels:
+                    print(f"invalid config: {device_key} has overlapping channels with previous configured devices")
+                    exit()
+                used_input_channels.append(req_input_chann)
+                channels_required[input_uid] = used_input_channels
+                self.input_devices_required.add(input_uid)
 
             self.controls[device_key] = self.Control()
-            input_uid = value.get("input_device")
-            output_uid = value.get("output_device")
-            used_input_channels = channels_required.get(input_uid, [])
-            used_output_channels = channels_required.get(output_uid, [])
-            req_input_chann = value.get("input_channel")
-            req_output_chann = value.get("input_channel")
-            if req_input_chann in used_input_channels or req_output_chann in used_output_channels:
-                print(f"invalid config: {device_key} has overlapping channels with previous configured devices")
-                exit()
-            used_output_channels.append(req_output_chann)
-            used_input_channels.append(req_input_chann)
-            channels_required[input_uid] = used_input_channels
-            channels_required[output_uid] = used_output_channels
-
             print("VALID config!")
-            self.devices_required.add(input_uid)
-            self.devices_required.add(output_uid)
 
         self.setup_devices()
 
-        for uid in self.devices_required:
-            if uid not in self.devices_present:
+        for uid in itertools.chain(self.input_devices_required, self.output_devices_required):
+            if uid not in self.devices_present and self.operation_mode == 0:
                 raise ModuleNotFoundError(f"Missing Tinkerforge Element: {uid}")
         print("\nvalid setup for configured initialisation detected \n")
-        # maybe make a secondary list for optional, and then throw a warning
-        # do we need a device identifier check? what happen to TF elements if we go wrong?
 
     def cb_enumerate(self, uid, connected_uid, _, hardware_version, firmware_version,
                      device_identifier, enumeration_type):
 
-        # print("Enumeration Type triggered:  " + str(enumeration_type))
-
-        # This only triggers when the master brick disconnects it seems
         if enumeration_type == IPConnection.ENUMERATION_TYPE_DISCONNECTED:
-            # @Todo: device identifier is already known, catch it from devices_present
-            print(f"Disconnect detected from device: {uid} - "
-                  f"{device_identifier_types.get(device_identifier, 'unknown device type')}")
+            # in case of a master disconnect the device_type is listed as 0 for all lost devices
+            try:
+                dev = self.devices_present[uid]
+                if dev.get("parent_uid", 0) == 0:
+                    print(f"Disconnect detected from Master Brick: {uid} - along with following devices")
+                else:
+                    print(f"Disconnect detected from device: {uid} - "
+                         f"{self.get_brick_name(dev.get('device_identifier', 0))}")
+            except KeyError:
+                pass
             return
 
         if uid not in self.devices_present.keys():
@@ -356,20 +444,24 @@ class TFH:
             # print("Position:          " + _)
             print("Hardware Version:  " + str(hardware_version))
             print("Firmware Version:  " + str(firmware_version))
-            print("Device Identifier: " + str(device_identifier))
-            print(device_identifier_types.get(device_identifier, "unknown"))
+            print("Device Identifier: " + str(device_identifier) + f" - {self.get_brick_name(device_identifier)}")
             print("")
         else:
             print(f"reconnect detected from device: {uid} - "
-                  f"{device_identifier_types.get(device_identifier, 'unknown device type')}")
-            # only if the device is required/was used before its getting reconnected
-            if uid in self.devices_required:
+                  f"{self.get_brick_name(device_identifier)}")
+            if uid in itertools.chain(self.input_devices_required, self.output_devices_required):
                 self.setup_device(uid)
 
-    def setup_device(self, uid):
+    def setup_device(self, uid, args=()):
         device_entry = self.devices_present.get(uid)
         if device_entry is None:
             print(f"Setup of not present device requested {uid}")
+            if self.operation_mode == self.OperationModes.dummyMode:
+                print(f"Setup device  {uid} as dummy")
+                if uid in self.output_devices_required:
+                    self.outputs[uid] = self.DummyDevice(uid)
+                else:
+                    self.inputs[uid] = self.DummyDevice(uid)
             return
 
         device_identifier = device_entry.get("device_identifier")
@@ -379,15 +471,14 @@ class TFH:
         except (KeyError, AttributeError):
             old_values = False
 
-        match device_identifier:
-            case 2120:
-                dev = self.inputs[uid] = self.IndustrialDual020mAV2(uid, self.conn)
-            case 2121:
-                dev = self.inputs[uid] = self.IndustrialDualAnalogInV2(uid, self.conn)
-            case 2116:
-                dev = self.outputs[uid] = self.IndustrialAnalogOutV2(uid, self.conn)
-
-            case _:
+        cls = self.get_io_cls(TFH.InputDevice, device_identifier)
+        if cls is not None:
+            dev = self.inputs[uid] = cls(uid, self.conn, args)
+        else:
+            cls = self.get_io_cls(TFH.OutputDevice, device_identifier)
+            if cls is not None:
+                dev = self.outputs[uid] = cls(uid, self.conn, args)
+            else:
                 print(f"{uid} failed to setup device due to unknown device type {device_identifier}")
                 exit()
 
@@ -395,10 +486,10 @@ class TFH:
             dev.values = old_values
             
         print(f"successfully setup device {uid} - "
-              f"{device_identifier_types.get(device_identifier, 'unknown device type')}")
+              f"{type(dev).__name__}")
 
     def setup_devices(self):
         print()
-        for key in self.devices_required:
+        for key in itertools.chain(self.input_devices_required, self.output_devices_required):
             self.setup_device(key)
         print()
