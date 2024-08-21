@@ -22,7 +22,7 @@ from tinkerforge.bricklet_industrial_digital_in_4_v2 import BrickletIndustrialDi
 from tinkerforge.ip_connection import IPConnection
 from tinkerforge.ip_connection import Error as IPConnError
 from threading import Thread
-from control_types import Controls
+from .control_types import Controls
 import inspect
 import itertools
 
@@ -49,7 +49,7 @@ def get_config(config_name):
         exit()
     else:
         try:
-            import src.config as cfg
+            import config as cfg
             return cfg.config
         except ModuleNotFoundError:
             exit("no backup python config present, exiting")
@@ -379,11 +379,9 @@ class TFH:
 
         channels_required = {}
         for device_key, value in self.config.items():
-
             print(f"checking devices for {device_key}")
-            type_requirements = Controls.types.get("type", Controls.Entries.hasOutputs + Controls.Entries.hasInputs)
-
-            if type_requirements ^ Controls.Entries.hasOutputs:
+            type_requirements = Controls.types.get(value["type"], Controls.Entries.hasOutputs + Controls.Entries.hasInputs)
+            if type_requirements & Controls.Entries.hasOutputs:
                 if not all(key in value for key in ("output_device", "output_channel")):
                     print(f"invalid config for device {device_key} due to missing output parameter")
                     exit()
@@ -397,8 +395,8 @@ class TFH:
                 channels_required[output_uid] = used_output_channels
                 self.output_devices_required.add(output_uid)
 
-            if type_requirements ^ Controls.Entries.hasInputs:
-                if not all(key in value for key in ("output_device", "output_channel")):
+            if type_requirements & Controls.Entries.hasInputs:
+                if not all(key in value for key in ("input_device", "input_channel")):
                     print(f"invalid config for device {device_key} due to missing input parameter")
                     exit()
                 input_uid = value.get("input_device")

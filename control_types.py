@@ -11,8 +11,9 @@ class Controls:
         "valve": Entries.hasOutputs,
         "easy_PI": Entries.hasOutputs,
         "ExtInput": Entries.hasInputs,
-        "pressure": Entries.hasOutputs,
-        "thermocouple": Entries.hasOutputs,
+        "pressure": Entries.hasInputs,
+        "thermocouple": Entries.hasInputs,
+        "mfc": Entries.hasInputs + Entries.hasOutputs,
     }
 
 
