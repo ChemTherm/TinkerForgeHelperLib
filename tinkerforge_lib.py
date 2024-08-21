@@ -265,14 +265,15 @@ class TFH:
     def cleanup(self):
         self.run = False
         sleep(0.2)
-        for uid, output_dev in self.outputs.items():
-            for index in range(output_dev.output_cnt):
-                output_dev.values[index] = 0
-            try:
-                output_dev.stop()
-            except AttributeError:
-                pass
-        self.__manage_outputs()
+        if  self.operation_mode != self.OperationModes.dummyMode:
+            for uid, output_dev in self.outputs.items():
+                for index in range(output_dev.output_cnt):
+                    output_dev.values[index] = 0
+                try:
+                    output_dev.stop()
+                except AttributeError:
+                    pass
+            self.__manage_outputs()
 
     def __loop(self):
         print("starting main loop")
