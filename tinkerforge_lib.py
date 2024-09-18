@@ -386,6 +386,11 @@ class TFH:
         for device_key, value in self.config.items():
             print(f"checking devices for {device_key}")
             type_requirements = Controls.types.get(value["type"], Controls.Entries.hasOutputs + Controls.Entries.hasInputs)
+             # Überspringe externe Geräte, z.B. Modbus oder über andere Protokolle
+            if "type" in value and "extern" in value["type"].lower():
+                print(f"Skipping device {device_key} because its type is 'extern'")
+                continue
+
             if type_requirements & Controls.Entries.hasOutputs:
                 if not all(key in value for key in ("output_device", "output_channel")):
                     print(f"invalid config for device {device_key} due to missing output parameter")
