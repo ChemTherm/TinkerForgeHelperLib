@@ -134,11 +134,12 @@ class TFH:
             super().__init__(uid, 1)
             self.dev = BrickletThermocoupleV2(uid, conn)        
             type_dict = {'B': 0, 'E': 1, 'J': 2, 'K': 3, 'N': 4, 'R': 5, 'S': 6, 'T': 7}
-            try:
-                thermocouple_type = type_dict[typ.upper()]
-            except KeyError:
-                print(f"invalid thermocouple config for {uid}, type not found {typ}")
-                exit()
+            thermocouple_type = type_dict['K'] 
+            #try:
+            #    thermocouple_type = type_dict[typ.upper()]
+            #except KeyError:
+            #    print(f"invalid thermocouple config for {uid}, type not found {typ}")
+            #    exit()
             self.dev.set_configuration(16, thermocouple_type, 0)
             self.dev.register_callback(self.dev.CALLBACK_TEMPERATURE, self.collect_temperature)
             self.dev.set_temperature_callback_configuration(100, False, "x", 0, 0)
