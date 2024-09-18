@@ -8,6 +8,7 @@ class Controls:
 
     types = {
         "ExtOutput": Entries.hasOutputs,
+        "ExtInputOutput": Entries.hasInputs + Entries.hasOutputs,
         "valve": Entries.hasOutputs,
         "easy_PI": Entries.hasOutputs,
         "ExtInput": Entries.hasInputs,

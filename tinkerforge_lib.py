@@ -386,6 +386,11 @@ class TFH:
         for device_key, value in self.config.items():
             print(f"checking devices for {device_key}")
             type_requirements = Controls.types.get(value["type"], Controls.Entries.hasOutputs + Controls.Entries.hasInputs)
+             # Überspringe externe Geräte, z.B. Modbus oder über andere Protokolle
+            if "type" in value and "extern" in value["type"].lower():
+                print(f"Skipping device {device_key} because its type is 'extern'")
+                continue
+
             if type_requirements & Controls.Entries.hasOutputs:
                 if not all(key in value for key in ("output_device", "output_channel")):
                     print(f"invalid config for device {device_key} due to missing output parameter")
@@ -401,6 +406,13 @@ class TFH:
                 self.output_devices_required.add(output_uid)
 
             if type_requirements & Controls.Entries.hasInputs:
+                # Spezielle Behandlung für Thermoelemente
+                if value["type"] == "thermocouple":
+                    if "input_channel" not in value:
+                        print(f"input_channel fehlt für Gerät {device_key}, wird auf 0 gesetzt")
+                        value["input_channel"] = 0
+
+                # Allgemeine Prüfung auf fehlende Parameter
                 if not all(key in value for key in ("input_device", "input_channel")):
                     print(f"invalid config for device {device_key} due to missing input parameter")
                     exit()
