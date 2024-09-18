@@ -203,14 +203,18 @@ class TFH:
             super().__init__(uid, 4)
             self.values = [False] * 4
             self.dev = BrickletIndustrialDigitalOut4V2(uid, conn)
-            self.frequency = 10
+            self.frequency = 100
             self.dev.set_pwm_configuration(0, self.frequency, 0)
             self.dev.set_pwm_configuration(1, self.frequency, 0)
             self.dev.set_pwm_configuration(2, self.frequency, 0)
             self.dev.set_pwm_configuration(3, self.frequency, 0)
 
         def set_outputs(self):
-            self.dev.set_value(self.values)
+            #self.dev.set_value(self.values)
+            self.dev.set_pwm_configuration(0, self.frequency, self.values[0]*100)
+            self.dev.set_pwm_configuration(1, self.frequency, self.values[1]*100)
+            self.dev.set_pwm_configuration(2, self.frequency, self.values[2]*100)
+            self.dev.set_pwm_configuration(3, self.frequency, self.values[3]*100)
 
     # @TODD: WIP
     class SilentStepper(OutputDevice):
