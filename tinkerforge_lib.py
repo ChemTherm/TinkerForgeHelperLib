@@ -194,8 +194,11 @@ class TFH:
             super().__init__(uid, 2)
             self.dev = BrickletIndustrialAnalogOutV2(uid, conn)
             self.dev.set_voltage(0)
-            self.dev.set_enabled(True)
+            #self.dev.set_current(4500)
+            self.dev.set_enabled(True)              
             self.dev.set_out_led_status_config(0, 5000, 1)
+
+
 
     class IndustrialDigitalOut4(OutputDevice):
         device_type = 2124
@@ -364,6 +367,7 @@ class TFH:
 
             try:
                 output_dev.dev.set_voltage(output_dev.values[0])
+                #output_dev.dev.set_current(output_dev.values[0])
                 # @TODO there needs to be a check on the channels and device specific fncs/class or whatever
             except Exception as exp:
                 print(exp)
