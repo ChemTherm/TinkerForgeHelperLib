@@ -114,18 +114,15 @@ class TFH:
             self.current_channel = 0
             super().__init__(uid, 2)
             self.dev = BrickletIndustrialDual020mAV2(uid, conn)
-            self.dev.register_callback(self.dev.CALLBACK_CURRENT, self.collect_single_current)
-            self.dev.set_current_callback_configuration(self.current_channel, 500,
+            for channel in range(self.input_cnt):
+                self.dev.register_callback(self.dev.CALLBACK_CURRENT, self.collect_single_current)
+                self.dev.set_current_callback_configuration(channel, 500,
                                                         False, "x", 0, 0)
 
         def collect_single_current(self, channel, value):
             self.values[channel] = value
             self.reset_activity()
             # print(f"reading input on device {self.uid} - {channel} {value}")
-            if channel < self.input_cnt:
-                self.current_channel += 1
-            else:
-                self.current_channel = 0
 
     class ThermoCouple(InputDevice):
         device_type = 2109
