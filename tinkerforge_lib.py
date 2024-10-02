@@ -186,11 +186,12 @@ class TFH:
 
     class IndustrialAnalogOutV2(OutputDevice):
         device_type = 2116
+        voltage_channel = 0
+        current_channel = 1
 
         def __init__(self, uid, conn, args):
             super().__init__(uid, 2)
-            self.voltage_channel = 0
-            self.current_channel = 1
+
             self.dev = BrickletIndustrialAnalogOutV2(uid, conn)
             self.dev.set_voltage(0)
             self.dev.set_current(0)
