@@ -15,6 +15,7 @@ class Controls:
         "pressure": Entries.hasInputs,
         "thermocouple": Entries.hasInputs,
         "mfc": Entries.hasInputs + Entries.hasOutputs,
+        "Vorgabe": 0,
     }
 
 
