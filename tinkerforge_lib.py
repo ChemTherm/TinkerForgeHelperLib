@@ -88,6 +88,7 @@ class TFH:
             self.operational = True
             self.timeout = timeout
             self.ioType = 0
+
         def reset_activity(self):
             self.activity_timestamp = dt.now()
 
@@ -188,10 +189,17 @@ class TFH:
 
         def __init__(self, uid, conn, args):
             super().__init__(uid, 2)
+            self.voltage_channel = 0
+            self.current_channel = 1
             self.dev = BrickletIndustrialAnalogOutV2(uid, conn)
             self.dev.set_voltage(0)
+            self.dev.set_current(0)
             self.dev.set_enabled(True)
             self.dev.set_out_led_status_config(0, 5000, 1)
+
+        def set_outputs(self):
+            self.dev.set_voltage(self.values[self.voltage_channel])
+            self.dev.set_current(self.values[self.current_channel])
 
     class IndustrialDigitalOut4(OutputDevice):
         device_type = 2124
