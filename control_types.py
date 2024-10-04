@@ -13,6 +13,7 @@ class Controls:
         "easy_PI": Entries.hasOutputs,
         "ExtInput": Entries.hasInputs,
         "pressure": Entries.hasInputs,
+        "FlowMeter": Entries.hasInputs,
         "thermocouple": Entries.hasInputs,
         "mfc": Entries.hasInputs + Entries.hasOutputs,
         "Vorgabe": 0,

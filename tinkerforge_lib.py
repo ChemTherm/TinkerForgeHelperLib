@@ -114,18 +114,16 @@ class TFH:
             self.current_channel = 0
             super().__init__(uid, 2)
             self.dev = BrickletIndustrialDual020mAV2(uid, conn)
-            self.dev.register_callback(self.dev.CALLBACK_CURRENT, self.collect_single_current)
-            self.dev.set_current_callback_configuration(self.current_channel, 500,
+            for channel in range(self.input_cnt):
+                self.dev.register_callback(self.dev.CALLBACK_CURRENT, self.collect_single_current)
+                self.dev.set_current_callback_configuration(channel, 500,
                                                         False, "x", 0, 0)
 
         def collect_single_current(self, channel, value):
             self.values[channel] = value
             self.reset_activity()
             # print(f"reading input on device {self.uid} - {channel} {value}")
-            if channel < self.input_cnt:
-                self.current_channel += 1
-            else:
-                self.current_channel = 0
+            
 
     class ThermoCouple(InputDevice):
         device_type = 2109
@@ -134,12 +132,12 @@ class TFH:
             super().__init__(uid, 1)
             self.dev = BrickletThermocoupleV2(uid, conn)        
             type_dict = {'B': 0, 'E': 1, 'J': 2, 'K': 3, 'N': 4, 'R': 5, 'S': 6, 'T': 7}
-            try:
+            """ try:
                 thermocouple_type = type_dict[typ.upper()]
             except KeyError:
                 print(f"invalid thermocouple config for {uid}, type not found {typ}")
-                exit()
-            self.dev.set_configuration(16, thermocouple_type, 0)
+                exit() """
+            self.dev.set_configuration(16, 3, 0)
             self.dev.register_callback(self.dev.CALLBACK_TEMPERATURE, self.collect_temperature)
             self.dev.set_temperature_callback_configuration(100, False, "x", 0, 0)
 
