@@ -102,7 +102,7 @@ class TFH:
     class IndustrialDualAnalogInV2(InputDevice):
         device_type = 2121
 
-        def __init__(self, uid, conn, args):
+        def __init__(self, uid, conn, args=None):
             super().__init__(uid, 2)
             self.dev = BrickletIndustrialDualAnalogInV2(uid, conn)
             self.dev.register_callback(self.dev.CALLBACK_ALL_VOLTAGES, self.collect_all)
@@ -111,7 +111,7 @@ class TFH:
     class IndustrialDual020mAV2(InputDevice):
         device_type = 2120
 
-        def __init__(self, uid, conn, args):
+        def __init__(self, uid, conn, args=None):
             self.current_channel = 0
             super().__init__(uid, 2)
             self.dev = BrickletIndustrialDual020mAV2(uid, conn)
@@ -128,10 +128,14 @@ class TFH:
     class ThermoCouple(InputDevice):
         device_type = 2109
         
-        def __init__(self, uid, conn, typ='N'):
+        def __init__(self, uid, conn, args=[(1, 'N')]):
             super().__init__(uid, 1)
-            self.dev = BrickletThermocoupleV2(uid, conn)        
+            self.dev = BrickletThermocoupleV2(uid, conn)
             type_dict = {'B': 0, 'E': 1, 'J': 2, 'K': 3, 'N': 4, 'R': 5, 'S': 6, 'T': 7}
+            print("thermocouple init")
+            typ, *_ = args
+            typ = typ[1]
+            print(typ)
             try:
                 thermocouple_type = type_dict[typ.upper()]
             except KeyError:
@@ -176,7 +180,7 @@ class TFH:
     class DualRelay(OutputDevice):
         device_type = 284
 
-        def __init__(self, uid, conn, args):
+        def __init__(self, uid, conn, args=None):
             super().__init__(uid, 2)
             self.values = [False] * 2
             self.dev = BrickletIndustrialDualRelay(uid, conn)
@@ -189,7 +193,7 @@ class TFH:
         voltage_channel = 0
         current_channel = 1
 
-        def __init__(self, uid, conn, args):
+        def __init__(self, uid, conn, args=None):
             super().__init__(uid, 2)
 
             self.dev = BrickletIndustrialAnalogOutV2(uid, conn)
@@ -205,7 +209,7 @@ class TFH:
     class IndustrialDigitalOut4(OutputDevice):
         device_type = 2124
 
-        def __init__(self, uid, conn, args):
+        def __init__(self, uid, conn, args=None):
             super().__init__(uid, 4)
             self.values = [False] * 4
             self.dev = BrickletIndustrialDigitalOut4V2(uid, conn)
@@ -216,7 +220,7 @@ class TFH:
             self.dev.set_pwm_configuration(3, self.frequency, 0)
 
         def set_outputs(self):
-            #self.dev.set_value(self.values)
+            # self.dev.set_value(self.values)
             self.dev.set_pwm_configuration(0, self.frequency, self.values[0]*100)
             self.dev.set_pwm_configuration(1, self.frequency, self.values[1]*100)
             self.dev.set_pwm_configuration(2, self.frequency, self.values[2]*100)
@@ -226,7 +230,7 @@ class TFH:
     class SilentStepper(OutputDevice):
         device_type = 19
 
-        def __init__(self, uid, conn, args):
+        def __init__(self, uid, conn, args=None):
             super().__init__(uid, 1)
             self.dev = BrickSilentStepper(uid, conn)
             self.dev.enable()
@@ -242,6 +246,7 @@ class TFH:
         self.devices_present = {}
         self.input_devices_required = set()
         self.output_devices_required = set()
+        self.device_settings = {}
         self.operation_mode = debug_mode
         self.config = get_config(config_name)
         self.inputs = {}
@@ -399,6 +404,7 @@ class TFH:
 
             if type_requirements & Controls.Entries.hasOutputs:
                 if not all(key in value for key in ("output_device", "output_channel")):
+                    # @todo: make this optional if there is only one channel available like in a thermocouple
                     print(f"invalid config for device {device_key} due to missing output parameter")
                     exit()
                 output_uid = value.get("output_device")
@@ -409,6 +415,13 @@ class TFH:
                     exit()
                 used_output_channels.append(req_output_chann)
                 channels_required[output_uid] = used_output_channels
+
+                device_setting = value.get("output_param")
+                if device_setting:
+                    if output_uid in self.device_settings.keys():
+                        self.device_settings[output_uid].append((req_output_chann, device_setting))
+                    else:
+                        self.device_settings[output_uid] = [(req_output_chann, device_setting)]
                 self.output_devices_required.add(output_uid)
 
             if type_requirements & Controls.Entries.hasInputs:
@@ -473,7 +486,7 @@ class TFH:
             if uid in itertools.chain(self.input_devices_required, self.output_devices_required):
                 self.setup_device(uid)
 
-    def setup_device(self, uid, args=()):
+    def setup_device(self, uid):
         device_entry = self.devices_present.get(uid)
         if device_entry is None:
             print(f"Setup of not present device requested {uid}")
@@ -485,6 +498,7 @@ class TFH:
                     self.inputs[uid] = self.DummyDevice(uid)
             return
 
+        args = self.device_settings.get(uid)
         device_identifier = device_entry.get("device_identifier")
 
         try:
@@ -494,11 +508,11 @@ class TFH:
 
         cls = self.get_io_cls(TFH.InputDevice, device_identifier)
         if cls is not None:
-            dev = self.inputs[uid] = cls(uid, self.conn, args)
+            dev = self.inputs[uid] = cls(uid, self.conn, *(args,) if args is not None else ())
         else:
             cls = self.get_io_cls(TFH.OutputDevice, device_identifier)
             if cls is not None:
-                dev = self.outputs[uid] = cls(uid, self.conn, args)
+                dev = self.outputs[uid] = cls(uid, self.conn, *(args,) if args is not None else ())
             else:
                 print(f"{uid} failed to setup device due to unknown device type {device_identifier}")
                 exit()
