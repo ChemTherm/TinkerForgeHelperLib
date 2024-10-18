@@ -212,19 +212,26 @@ class TFH:
         def __init__(self, uid, conn, args=None):
             super().__init__(uid, 4)
             self.values = [False] * 4
+            self.modes = [False] * 4
             self.dev = BrickletIndustrialDigitalOut4V2(uid, conn)
             self.frequency = 100
-            self.dev.set_pwm_configuration(0, self.frequency, 0)
-            self.dev.set_pwm_configuration(1, self.frequency, 0)
-            self.dev.set_pwm_configuration(2, self.frequency, 0)
-            self.dev.set_pwm_configuration(3, self.frequency, 0)
+            for channel, mode in args:
+                if not mode:
+                    continue
+                self.modes[channel] = mode
+                if mode.upper() == "PWM":
+                    self.dev.set_pwm_configuration(channel, self.frequency, 0)
+                elif mode.upper() == "DIGITAL":
+                    self.dev.set_selected_value(channel=channel, value=False)
 
         def set_outputs(self):
-            # self.dev.set_value(self.values)
-            self.dev.set_pwm_configuration(0, self.frequency, self.values[0]*100)
-            self.dev.set_pwm_configuration(1, self.frequency, self.values[1]*100)
-            self.dev.set_pwm_configuration(2, self.frequency, self.values[2]*100)
-            self.dev.set_pwm_configuration(3, self.frequency, self.values[3]*100)
+            for channel, mode in enumerate(self.values):
+                if not mode:
+                    continue
+                if mode.upper() == "PWM":
+                    self.dev.set_pwm_configuration(channel, self.values[channel], 0)
+                elif mode.upper() == "DIGITAL":
+                    self.dev.set_selected_value(channel=channel, value=self.values[channel])
 
     # @TODD: WIP
     class SilentStepper(OutputDevice):
