@@ -208,6 +208,8 @@ class TFH:
 
     class IndustrialDigitalOut4(OutputDevice):
         device_type = 2124
+        mode_pwm = "PWM"
+        mode_digital = "DIGITAL"
 
         def __init__(self, uid, conn, args=None):
             super().__init__(uid, 4)
@@ -219,18 +221,20 @@ class TFH:
                 if not mode:
                     continue
                 self.modes[channel] = mode
-                if mode.upper() == "PWM":
+                if mode.upper() == self.mode_pwm:
                     self.dev.set_pwm_configuration(channel, self.frequency, 0)
-                elif mode.upper() == "DIGITAL":
+                elif mode.upper() == self.mode_digital:
                     self.dev.set_selected_value(channel=channel, value=False)
+                else:
+                    exit(f"default parameter for device {uid} given, no default permitted, exiting")
 
         def set_outputs(self):
             for channel, mode in enumerate(self.values):
                 if not mode:
                     continue
-                if mode.upper() == "PWM":
+                if mode.upper() == self.mode_pwm:
                     self.dev.set_pwm_configuration(channel, self.values[channel], 0)
-                elif mode.upper() == "DIGITAL":
+                elif mode.upper() == self.mode_digital:
                     self.dev.set_selected_value(channel=channel, value=self.values[channel])
 
     # @TODD: WIP
@@ -423,7 +427,7 @@ class TFH:
                 used_output_channels.append(req_output_chann)
                 channels_required[output_uid] = used_output_channels
 
-                device_setting = value.get("output_param")
+                device_setting = value.get("output_param", "default")
                 if device_setting:
                     if output_uid in self.device_settings.keys():
                         self.device_settings[output_uid].append((req_output_chann, device_setting))
@@ -454,7 +458,6 @@ class TFH:
 
             self.controls[device_key] = self.Control()
             print("VALID config!")
-
         self.setup_devices()
 
         for uid in itertools.chain(self.input_devices_required, self.output_devices_required):
