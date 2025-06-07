@@ -18,6 +18,7 @@ from tinkerforge.bricklet_industrial_dual_analog_in_v2 import BrickletIndustrial
 from tinkerforge.bricklet_industrial_dual_0_20ma_v2 import BrickletIndustrialDual020mAV2
 from tinkerforge.bricklet_industrial_dual_relay import BrickletIndustrialDualRelay
 from tinkerforge.bricklet_industrial_digital_in_4_v2 import BrickletIndustrialDigitalIn4V2
+from tinkerforge.bricklet_industrial_quad_relay_v2 import BrickletIndustrialQuadRelayV2
 
 from tinkerforge.ip_connection import IPConnection
 from tinkerforge.ip_connection import Error as IPConnError
@@ -38,21 +39,44 @@ default_timeout = timedelta(milliseconds=1000)
 
 
 def get_config(config_name):
-    if config_name:
-        try:
-            with open('./json_files/' + config_name + '.json', 'r') as config_file:
-                return json.load(config_file)
-        except FileNotFoundError:
-            print("missing config file")
-        except json.decoder.JSONDecodeError as err:
-            print(f"Config error:\n{err} \ncannot open config")
-        exit()
-    else:
-        try:
+    """
+    Lädt die Konfiguration entweder aus einer JSON-Datei oder aus dem config-Modul
+    und filtert dabei alle Einträge heraus, die den String "Modbus" (oder "Mobus") enthalten.
+    
+    :param config_name: Name der JSON-Datei (ohne Endung) oder False, um das config-Modul zu verwenden.
+    :return: Gefiltertes Konfigurationsdictionary oder None bei Fehler.
+    """
+    def contains_modbus(item):
+        """
+        Rekursive Hilfsfunktion, die prüft, ob im übergebenen Objekt (String, Liste, Dict)
+        der Substring "modbus" (oder "mobus") enthalten ist.
+        """
+        if isinstance(item, str):
+            # Prüft in Kleinbuchstaben, ob "modbus" oder "mobus" vorkommt
+            return "modbus" in item.lower() or "mobus" in item.lower()
+        elif isinstance(item, dict):
+            return any(contains_modbus(value) for value in item.values())
+        elif isinstance(item, list):
+            return any(contains_modbus(elem) for elem in item)
+        else:
+            return False
+
+    try:
+        # Konfiguration laden: entweder aus einer JSON-Datei oder aus dem config-Modul
+        if config_name:
+            with open(f'./json_files/{config_name}.json', 'r') as config_file:
+                config_data = json.load(config_file)
+        else:
             import config as cfg
-            return cfg.config
-        except ModuleNotFoundError:
-            exit("no backup python config present, exiting")
+            config_data = cfg.config  # Hier wird cfg.config verwendet
+
+        # Filtere alle Einträge, bei denen der Substring "Modbus" (oder "Mobus") irgendwo vorkommt
+        filtered_config = {k: v for k, v in config_data.items() if not contains_modbus(v)}
+        return filtered_config
+
+    except (FileNotFoundError, json.JSONDecodeError) as e:
+        print(f"Error loading config: {e}")
+        return None
 
 
 class TFH:
@@ -114,18 +138,16 @@ class TFH:
             self.current_channel = 0
             super().__init__(uid, 2)
             self.dev = BrickletIndustrialDual020mAV2(uid, conn)
-            self.dev.register_callback(self.dev.CALLBACK_CURRENT, self.collect_single_current)
-            self.dev.set_current_callback_configuration(self.current_channel, 500,
+            for channel in range(self.input_cnt):
+                self.dev.register_callback(self.dev.CALLBACK_CURRENT, self.collect_single_current)
+                self.dev.set_current_callback_configuration(channel, 500,
                                                         False, "x", 0, 0)
 
         def collect_single_current(self, channel, value):
             self.values[channel] = value
             self.reset_activity()
-            # print(f"reading input on device {self.uid} - {channel} {value}")
-            if channel < self.input_cnt:
-                self.current_channel += 1
-            else:
-                self.current_channel = 0
+            #print(f"reading input on device {self.uid} - {channel} {value}")
+            
 
     class ThermoCouple(InputDevice):
         device_type = 2109
@@ -134,11 +156,12 @@ class TFH:
             super().__init__(uid, 1)
             self.dev = BrickletThermocoupleV2(uid, conn)        
             type_dict = {'B': 0, 'E': 1, 'J': 2, 'K': 3, 'N': 4, 'R': 5, 'S': 6, 'T': 7}
-            try:
-                thermocouple_type = type_dict[typ.upper()]
-            except KeyError:
-                print(f"invalid thermocouple config for {uid}, type not found {typ}")
-                exit()
+            thermocouple_type = type_dict[typ] 
+            #try:
+            #    thermocouple_type = type_dict[typ.upper()]
+            #except KeyError:
+            #    print(f"invalid thermocouple config for {uid}, type not found {typ}")
+            #    exit()
             self.dev.set_configuration(16, thermocouple_type, 0)
             self.dev.register_callback(self.dev.CALLBACK_TEMPERATURE, self.collect_temperature)
             self.dev.set_temperature_callback_configuration(100, False, "x", 0, 0)
@@ -186,15 +209,32 @@ class TFH:
         def set_outputs(self):
             self.dev.set_value(*self.values)
 
+    class QuadRelayV2(OutputDevice):
+        device_type = 2102
+
+        def __init__(self, uid, conn, args):
+            super().__init__(uid, 2)
+            self.values = [False, False, False , False]
+            self.dev = BrickletIndustrialQuadRelayV2(uid, conn)
+
+        def set_outputs(self):
+            self.dev.set_value(self.values)
+
     class IndustrialAnalogOutV2(OutputDevice):
         device_type = 2116
 
         def __init__(self, uid, conn, args):
             super().__init__(uid, 2)
             self.dev = BrickletIndustrialAnalogOutV2(uid, conn)
-            self.dev.set_voltage(0)
-            self.dev.set_enabled(True)
+            
+            if uid == "27A7":
+                self.dev.set_current(0)
+            else:
+                self.dev.set_voltage(0)
+            self.dev.set_enabled(True)              
             self.dev.set_out_led_status_config(0, 5000, 1)
+
+
 
     class IndustrialDigitalOut4(OutputDevice):
         device_type = 2124
@@ -203,18 +243,19 @@ class TFH:
             super().__init__(uid, 4)
             self.values = [False] * 4
             self.dev = BrickletIndustrialDigitalOut4V2(uid, conn)
-            self.frequency = 100
+            self.frequency = 10
             self.dev.set_pwm_configuration(0, self.frequency, 0)
             self.dev.set_pwm_configuration(1, self.frequency, 0)
             self.dev.set_pwm_configuration(2, self.frequency, 0)
-            self.dev.set_pwm_configuration(3, self.frequency, 0)
+            self.dev.set_pwm_configuration(3, self.frequency, 0) 
 
         def set_outputs(self):
-            #self.dev.set_value(self.values)
-            self.dev.set_pwm_configuration(0, self.frequency, self.values[0]*100)
-            self.dev.set_pwm_configuration(1, self.frequency, self.values[1]*100)
-            self.dev.set_pwm_configuration(2, self.frequency, self.values[2]*100)
-            self.dev.set_pwm_configuration(3, self.frequency, self.values[3]*100)
+            self.dev.set_value(self.values)
+           #print(self.values)
+            self.dev.set_pwm_configuration(0, self.frequency, self.values[0]* self.frequency*1000)
+            self.dev.set_pwm_configuration(1, self.frequency, self.values[1]* self.frequency*1000)
+            self.dev.set_pwm_configuration(2, self.frequency, self.values[2]* self.frequency*1000)
+            self.dev.set_pwm_configuration(3, self.frequency, self.values[3]* self.frequency*1000)
 
     # @TODD: WIP
     class SilentStepper(OutputDevice):
@@ -232,7 +273,7 @@ class TFH:
         self.conn = IPConnection()
         self.conn.connect(ip, port)
         self.conn.register_callback(IPConnection.CALLBACK_ENUMERATE, self.cb_enumerate)
-
+        
         self.devices_present = {}
         self.input_devices_required = set()
         self.output_devices_required = set()
@@ -241,6 +282,7 @@ class TFH:
         self.inputs = {}
         self.outputs = {}
         self.controls = {}
+        self.args ={}
         self.verify_config_devices()
 
         self.run = True
@@ -298,7 +340,7 @@ class TFH:
             output_channel = control_rule.get("output_channel")
             output_device_uid = control_rule.get("output_device")
 
-            if self.operation_mode == 1 or input_device_uid is None or control_rule.get("type") == "easy_PI":
+            if self.operation_mode == 1 or input_device_uid is None or control_rule.get("type") == "easy_PI" or control_rule.get("type") == "direct_Heat" or "extern" in control_rule["type"].lower():
                 continue
             if not self.inputs[input_device_uid].operational:
                 self.__run_failsafe_control()
@@ -362,7 +404,10 @@ class TFH:
                 pass
 
             try:
-                output_dev.dev.set_voltage(output_dev.values[0])
+                if uid == "27A7":
+                    output_dev.dev.set_current(output_dev.values[0])
+                else:
+                    output_dev.dev.set_voltage(output_dev.values[0])
                 # @TODO there needs to be a check on the channels and device specific fncs/class or whatever
             except Exception as exp:
                 print(exp)
@@ -383,12 +428,21 @@ class TFH:
             raise ConnectionError("No Tinkerforge module found, check connection to master brick")
 
         channels_required = {}
+        self.uid_to_device_keys = {}  # UID → Liste von device_keys, falls mehrere Keys dasselbe Gerät verwenden
+
         for device_key, value in self.config.items():
+            self.args[device_key] = " "
             print(f"checking devices for {device_key}")
             type_requirements = Controls.types.get(value["type"], Controls.Entries.hasOutputs + Controls.Entries.hasInputs)
              # Überspringe externe Geräte, z.B. Modbus oder über andere Protokolle
             if "type" in value and "extern" in value["type"].lower():
                 print(f"Skipping device {device_key} because its type is 'extern'")
+                continue
+            if "type" in value and "modbus_pump" in value["type"].lower():
+                print(f"Skipping device {device_key} because its type is 'Modbus_Pump'")
+                continue
+            if "input_device" in value and "modbus" in value["input_device"].lower() or "output_device" in value and "modbus" in value["output_device"].lower():
+                print(f"Skipping device {device_key} because its type is 'Modbus_Pump'")
                 continue
 
             if type_requirements & Controls.Entries.hasOutputs:
@@ -404,16 +458,20 @@ class TFH:
                 used_output_channels.append(req_output_chann)
                 channels_required[output_uid] = used_output_channels
                 self.output_devices_required.add(output_uid)
+                # Zuordnung UID → device_key
+                self.uid_to_device_keys.setdefault(output_uid, []).append(device_key)
 
             if type_requirements & Controls.Entries.hasInputs:
                 # Spezielle Behandlung für Thermoelemente
                 if value["type"] == "thermocouple":
-                    if "input_channel" not in value:
-                        print(f"input_channel fehlt für Gerät {device_key}, wird auf 0 gesetzt")
-                        value["input_channel"] = 0
+                    if "tc_type" not in value:
+                        print(f"tc_type fehlt für Gerät {device_key}, Programm wird beendet")
+                        exit()
+                    else:
+                        self.args[device_key] = value.get("tc_type")
 
                 # Allgemeine Prüfung auf fehlende Parameter
-                if not all(key in value for key in ("input_device", "input_channel")):
+                if not all(key in value for key in ("input_device", "input_channel")) and not value["type"] == "thermocouple" :
                     print(f"invalid config for device {device_key} due to missing input parameter")
                     exit()
                 input_uid = value.get("input_device")
@@ -425,6 +483,8 @@ class TFH:
                 used_input_channels.append(req_input_chann)
                 channels_required[input_uid] = used_input_channels
                 self.input_devices_required.add(input_uid)
+                 # Zuordnung UID → device_key
+                self.uid_to_device_keys.setdefault(input_uid, []).append(device_key)
 
             self.controls[device_key] = self.Control()
             print("VALID config!")
@@ -485,9 +545,9 @@ class TFH:
             old_values = self.outputs[uid].values
         except (KeyError, AttributeError):
             old_values = False
-
         cls = self.get_io_cls(TFH.InputDevice, device_identifier)
         if cls is not None:
+            #print(args)
             dev = self.inputs[uid] = cls(uid, self.conn, args)
         else:
             cls = self.get_io_cls(TFH.OutputDevice, device_identifier)
@@ -500,11 +560,15 @@ class TFH:
         if old_values:
             dev.values = old_values
             
-        print(f"successfully setup device {uid} - "
-              f"{type(dev).__name__}")
+        if any(str(arg).strip() for arg in args):
+            print(f"successfully setup device {uid} - {type(dev).__name__} "
+                  f"with argument(s): {', '.join(map(str, args))}")
+        else:
+            print(f"successfully setup device {uid} - {type(dev).__name__}")
 
     def setup_devices(self):
-        print()
         for key in itertools.chain(self.input_devices_required, self.output_devices_required):
-            self.setup_device(key)
-        print()
+            device_keys = self.uid_to_device_keys.get(key, [])
+            for dk in device_keys:
+                args = self.args.get(dk, ())
+                self.setup_device(key, args)
